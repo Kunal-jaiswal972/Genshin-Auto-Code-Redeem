@@ -1,0 +1,304 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import { z } from "zod";
+import {
+  CodeStatus,
+  GameId,
+  RedeemStatus,
+  codeStatusValues,
+  redeemStatusValues,
+  type GameIdValue,
+  type RedeemStatusValue,
+} from "../config/constants.js";
+import { getEnv } from "../config/env.js";
+import { StorageError } from "../core/errors.js";
+import type { NormalizedScrapedCode } from "../types/games.js";
+import type { CodeRedeemResult } from "../types/redeem.js";
+import type { CodeStore, CodeStoreEntry, CodeStoreMergeResult } from "../types/codeStore.js";
+import { getTodayRunDate } from "../utils/utils.js";
+
+const codeStoreEntrySchema = z.object({
+  code: z.string().min(1),
+  wikiStatus: z.enum(codeStatusValues),
+  redeemStatus: z.enum(redeemStatusValues),
+  message: z.string().optional(),
+  scrapedAt: z.string().min(1),
+  attemptedAt: z.string().optional(),
+  source: z.string().optional(),
+});
+
+const codeStoreSchema = z.object({
+  gameId: z.enum([GameId.GENSHIN]),
+  lastScrapeDate: z.string().nullable(),
+  lastScrapedAt: z.string().nullable(),
+  codes: z.array(codeStoreEntrySchema),
+});
+
+const skipRedeemStatuses: RedeemStatusValue[] = [
+  RedeemStatus.REDEEMED,
+  RedeemStatus.EXPIRED,
+  RedeemStatus.UNAVAILABLE,
+];
+
+function normalizeStoreEntry(entry: CodeStoreEntry): CodeStoreEntry {
+  if (entry.redeemStatus !== RedeemStatus.FAILED) {
+    return entry;
+  }
+
+  const lower = (entry.message ?? "").toLowerCase();
+
+  if (lower.includes("already") || lower.includes("in use")) {
+    return {
+      ...entry,
+      redeemStatus: RedeemStatus.REDEEMED,
+    };
+  }
+
+  if (lower.includes("expired") || lower.includes("expire")) {
+    return {
+      ...entry,
+      redeemStatus: RedeemStatus.EXPIRED,
+    };
+  }
+
+  return {
+    ...entry,
+    redeemStatus: RedeemStatus.PENDING,
+  };
+}
+
+function normalizeStore(store: CodeStore): CodeStore {
+  return {
+    ...store,
+    codes: store.codes.map(normalizeStoreEntry),
+  };
+}
+
+function normalizeCodeValue(code: string): string {
+  return code.trim().toUpperCase();
+}
+
+function createEmptyStore(gameId: GameIdValue): CodeStore {
+  return {
+    gameId,
+    lastScrapeDate: null,
+    lastScrapedAt: null,
+    codes: [],
+  };
+}
+
+function resolveStorePath(): string {
+  return path.resolve(getEnv().codeStorePath);
+}
+
+async function ensureStoreDirectory(storePath: string): Promise<void> {
+  await fs.mkdir(path.dirname(storePath), { recursive: true });
+}
+
+async function readStoreFile(storePath: string): Promise<CodeStore | null> {
+  try {
+    const raw = await fs.readFile(storePath, "utf8");
+    const parsed = codeStoreSchema.safeParse(JSON.parse(raw));
+
+    if (!parsed.success) {
+      throw new StorageError(
+        `Invalid code store file at ${storePath}: ${parsed.error.message}`,
+      );
+    }
+
+    return normalizeStore(parsed.data);
+  } catch (error) {
+    if (
+      error instanceof StorageError ||
+      !(error instanceof Error) ||
+      !("code" in error) ||
+      (error as NodeJS.ErrnoException).code !== "ENOENT"
+    ) {
+      if (error instanceof StorageError) {
+        throw error;
+      }
+
+      const cause = error instanceof Error ? error : new Error(String(error));
+      throw new StorageError(`Failed to read code store at ${storePath}.`, cause);
+    }
+
+    return null;
+  }
+}
+
+async function writeStoreFile(storePath: string, store: CodeStore): Promise<void> {
+  try {
+    await ensureStoreDirectory(storePath);
+    const payload = `${JSON.stringify(store, null, 2)}\n`;
+    await fs.writeFile(storePath, payload, "utf8");
+  } catch (error) {
+    const cause = error instanceof Error ? error : new Error(String(error));
+    throw new StorageError(`Failed to write code store at ${storePath}.`, cause);
+  }
+}
+
+async function loadCodeStore(gameId: GameIdValue): Promise<CodeStore> {
+  const storePath = resolveStorePath();
+  const existing = await readStoreFile(storePath);
+
+  if (!existing) {
+    return createEmptyStore(gameId);
+  }
+
+  if (existing.gameId !== gameId) {
+    throw new StorageError(
+      `Code store gameId mismatch: expected ${gameId}, found ${existing.gameId}.`,
+    );
+  }
+
+  return normalizeStore(existing);
+}
+
+async function saveCodeStore(store: CodeStore): Promise<void> {
+  await writeStoreFile(resolveStorePath(), store);
+}
+
+export async function hasScrapedToday(gameId: GameIdValue): Promise<boolean> {
+  const store = await loadCodeStore(gameId);
+  return store.lastScrapeDate === getTodayRunDate();
+}
+
+export async function mergeScrapedCodes(
+  gameId: GameIdValue,
+  scraped: NormalizedScrapedCode[],
+  source: string,
+): Promise<CodeStoreMergeResult> {
+  const store = await loadCodeStore(gameId);
+  const now = new Date().toISOString();
+  const byCode = new Map<string, CodeStoreEntry>();
+
+  for (const entry of store.codes) {
+    byCode.set(normalizeCodeValue(entry.code), entry);
+  }
+
+  const newCodes: string[] = [];
+  let activeCodes = 0;
+  let expiredCodes = 0;
+
+  for (const scrapedEntry of scraped) {
+    const code = normalizeCodeValue(scrapedEntry.code);
+    const existing = byCode.get(code);
+    const isNew = existing === undefined;
+
+    if (scrapedEntry.status === CodeStatus.ACTIVE) {
+      activeCodes += 1;
+    } else {
+      expiredCodes += 1;
+    }
+
+    if (isNew) {
+      newCodes.push(code);
+    }
+
+    const nextEntry: CodeStoreEntry = {
+      code,
+      wikiStatus: scrapedEntry.status,
+      redeemStatus: existing?.redeemStatus ?? RedeemStatus.PENDING,
+      message: existing?.message,
+      scrapedAt: now,
+      attemptedAt: existing?.attemptedAt,
+      source,
+    };
+
+    byCode.set(code, nextEntry);
+  }
+
+  store.codes = [...byCode.values()].sort((left, right) =>
+    left.code.localeCompare(right.code),
+  );
+  store.lastScrapeDate = getTodayRunDate();
+  store.lastScrapedAt = now;
+
+  await saveCodeStore(store);
+
+  return {
+    newCodes,
+    activeCodes,
+    expiredCodes,
+  };
+}
+
+function getRedeemableCodeValues(store: CodeStore): string[] {
+  return store.codes
+    .filter(
+      (entry) =>
+        entry.wikiStatus === CodeStatus.ACTIVE &&
+        !skipRedeemStatuses.includes(entry.redeemStatus),
+    )
+    .map((entry) => entry.code);
+}
+
+export async function getRedeemableCodes(gameId: GameIdValue): Promise<string[]> {
+  const store = await loadCodeStore(gameId);
+  return getRedeemableCodeValues(store);
+}
+
+export async function getRedeemResumeStats(
+  gameId: GameIdValue,
+): Promise<{ toRedeem: string[]; skipped: number }> {
+  const store = await loadCodeStore(gameId);
+  const toRedeem = getRedeemableCodeValues(store);
+  const activeCount = store.codes.filter(
+    (entry) => entry.wikiStatus === CodeStatus.ACTIVE,
+  ).length;
+
+  return {
+    toRedeem,
+    skipped: activeCount - toRedeem.length,
+  };
+}
+
+export async function hasRedeemableCodes(gameId: GameIdValue): Promise<boolean> {
+  const codes = await getRedeemableCodes(gameId);
+  return codes.length > 0;
+}
+
+export async function persistRedeemResult(
+  gameId: GameIdValue,
+  result: CodeRedeemResult,
+): Promise<void> {
+  if (
+    result.status !== RedeemStatus.REDEEMED &&
+    result.status !== RedeemStatus.EXPIRED
+  ) {
+    return;
+  }
+
+  const store = await loadCodeStore(gameId);
+  const code = normalizeCodeValue(result.code);
+  const index = store.codes.findIndex(
+    (entry) => normalizeCodeValue(entry.code) === code,
+  );
+
+  if (index < 0) {
+    return;
+  }
+
+  const existing = store.codes[index];
+  if (!existing) {
+    return;
+  }
+
+  store.codes[index] = {
+    ...existing,
+    redeemStatus: result.status,
+    message: result.message,
+    attemptedAt: new Date().toISOString(),
+  };
+
+  await saveCodeStore(store);
+}
+
+export async function persistRedeemResults(
+  gameId: GameIdValue,
+  results: CodeRedeemResult[],
+): Promise<void> {
+  for (const result of results) {
+    await persistRedeemResult(gameId, result);
+  }
+}
