@@ -1,3 +1,8 @@
+---
+description: 
+alwaysApply: true
+---
+
 # AGENTS.md — Auto Code Redeemer v2
 
 Guidance for AI agents and contributors working on this repository.
