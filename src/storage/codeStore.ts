@@ -13,8 +13,13 @@ import { getEnv } from "../config/env.js";
 import { registeredGameIds } from "../games/registry.js";
 import { StorageError } from "../core/errors.js";
 import type { NormalizedScrapedCode } from "../types/games.js";
-import type { CodeRedeemResult } from "../types/redeem.js";
-import type { CodeStore, CodeStoreEntry, CodeStoreMergeResult } from "../types/codeStore.js";
+import type {
+  CodeStore,
+  CodeStoreEntry,
+  CodeStoreMergeResult,
+  MergeScrapedCodesOptions,
+  PersistRedeemResultOptions,
+} from "../types/codeStore.js";
 import { getTodayRunDate } from "../utils/utils.js";
 
 const codeStoreEntrySchema = z.object({
@@ -164,11 +169,9 @@ export async function hasScrapedToday(gameId: GameIdValue): Promise<boolean> {
 }
 
 export async function mergeScrapedCodes(
-  gameId: GameIdValue,
-  scraped: NormalizedScrapedCode[],
-  source: string,
+  options: MergeScrapedCodesOptions,
 ): Promise<CodeStoreMergeResult> {
-  const store = await loadCodeStore(gameId);
+  const store = await loadCodeStore(options.gameId);
   const now = new Date().toISOString();
   const byCode = new Map<string, CodeStoreEntry>();
 
@@ -180,7 +183,7 @@ export async function mergeScrapedCodes(
   let activeCodes = 0;
   let expiredCodes = 0;
 
-  for (const scrapedEntry of scraped) {
+  for (const scrapedEntry of options.scraped) {
     const code = normalizeCodeValue(scrapedEntry.code);
     const existing = byCode.get(code);
     const isNew = existing === undefined;
@@ -202,7 +205,7 @@ export async function mergeScrapedCodes(
       message: existing?.message,
       scrapedAt: now,
       attemptedAt: existing?.attemptedAt,
-      source,
+      source: options.source,
     };
 
     byCode.set(code, nextEntry);
@@ -259,18 +262,17 @@ export async function hasRedeemableCodes(gameId: GameIdValue): Promise<boolean> 
 }
 
 export async function persistRedeemResult(
-  gameId: GameIdValue,
-  result: CodeRedeemResult,
+  options: PersistRedeemResultOptions,
 ): Promise<void> {
   if (
-    result.status !== RedeemStatus.REDEEMED &&
-    result.status !== RedeemStatus.EXPIRED
+    options.result.status !== RedeemStatus.REDEEMED &&
+    options.result.status !== RedeemStatus.EXPIRED
   ) {
     return;
   }
 
-  const store = await loadCodeStore(gameId);
-  const code = normalizeCodeValue(result.code);
+  const store = await loadCodeStore(options.gameId);
+  const code = normalizeCodeValue(options.result.code);
   const index = store.codes.findIndex(
     (entry) => normalizeCodeValue(entry.code) === code,
   );
@@ -286,8 +288,8 @@ export async function persistRedeemResult(
 
   store.codes[index] = {
     ...existing,
-    redeemStatus: result.status,
-    message: result.message,
+    redeemStatus: options.result.status,
+    message: options.result.message,
     attemptedAt: new Date().toISOString(),
   };
 

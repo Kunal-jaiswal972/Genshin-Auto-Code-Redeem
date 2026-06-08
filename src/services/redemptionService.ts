@@ -6,9 +6,12 @@ import {
   hasRedeemableCodes,
   persistRedeemResult,
 } from "../storage/codeStore.js";
-import type { ChromeSession } from "../types/browser.js";
 import type { RedeemSummary } from "../types/orchestrator.js";
-import type { CodeRedeemResult, GameLoginCredentials } from "../types/redeem.js";
+import type { CodeRedeemResult } from "../types/redeem.js";
+import type {
+  RedeemCodesOptions,
+  RedeemWithGameEngineOptions,
+} from "../types/services.js";
 import { formatAccountLabel, logger } from "../utils/utils.js";
 
 function countResults(results: CodeRedeemResult[]): Omit<RedeemSummary, "codesAttempted"> {
@@ -55,18 +58,15 @@ function buildSummary(results: CodeRedeemResult[]): RedeemSummary {
 }
 
 async function redeemWithGameEngine(
-  gameId: GameIdValue,
-  session: ChromeSession,
-  credentials: GameLoginCredentials,
-  codes: string[],
+  options: RedeemWithGameEngineOptions,
 ): Promise<CodeRedeemResult[]> {
-  const redeem = getGameRedeemer(gameId);
+  const redeem = getGameRedeemer(options.gameId);
 
-  return redeem(session, {
-    credentials,
-    codes,
+  return redeem(options.session, {
+    credentials: options.credentials,
+    codes: options.codes,
     onCodeRedeemed: async (result) => {
-      await persistRedeemResult(gameId, result);
+      await persistRedeemResult({ gameId: options.gameId, result });
     },
   });
 }
@@ -78,13 +78,13 @@ export async function hasRedeemableCodesForGame(
 }
 
 export async function redeemCodes(
-  gameId: GameIdValue,
-  session: ChromeSession,
-  credentials: GameLoginCredentials,
+  options: RedeemCodesOptions,
 ): Promise<RedeemSummary> {
-  logger.step(`Redeeming codes for ${formatAccountLabel(credentials.email)}.`);
+  logger.step(`Redeeming codes for ${formatAccountLabel(options.credentials.email)}.`);
 
-  const { toRedeem: codesToRedeem, skipped } = await getRedeemResumeStats(gameId);
+  const { toRedeem: codesToRedeem, skipped } = await getRedeemResumeStats(
+    options.gameId,
+  );
 
   if (skipped > 0) {
     logger.gray(
@@ -97,12 +97,12 @@ export async function redeemCodes(
     return buildSummary([]);
   }
 
-  const results = await redeemWithGameEngine(
-    gameId,
-    session,
-    credentials,
-    codesToRedeem,
-  );
+  const results = await redeemWithGameEngine({
+    gameId: options.gameId,
+    session: options.session,
+    credentials: options.credentials,
+    codes: codesToRedeem,
+  });
 
   const summary = buildSummary(results);
   logger.success(

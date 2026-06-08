@@ -1,4 +1,6 @@
 import type { CodeStatusValue, GameIdValue, RedeemStatusValue } from "../config/constants.js";
+import type { NormalizedScrapedCode } from "./games.js";
+import type { CodeRedeemResult } from "./redeem.js";
 
 export interface CodeStoreEntry {
   code: string;
@@ -21,4 +23,20 @@ export interface CodeStoreMergeResult {
   newCodes: string[];
   activeCodes: number;
   expiredCodes: number;
+}
+
+export interface MergeScrapedCodesOptions {
+  gameId: GameIdValue;
+  scraped: NormalizedScrapedCode[];
+  source: string;
+}
+
+export interface PersistRedeemResultOptions {
+  gameId: GameIdValue;
+  result: CodeRedeemResult;
+}
+
+export interface ResolveCodeStorePathOptions {
+  basePath: string;
+  gameId: GameIdValue;
 }

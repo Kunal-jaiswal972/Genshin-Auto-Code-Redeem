@@ -1,5 +1,10 @@
 import chalk from "chalk";
 import { DATE_FORMAT_RUN } from "../config/constants.js";
+import type {
+  GetRandomDelayOptions,
+  WaitOptions,
+  WaitUntilOptions,
+} from "../types/utils.js";
 
 export function getTodayRunDate(): string {
   return new Date().toISOString().slice(0, DATE_FORMAT_RUN.length);
@@ -9,8 +14,8 @@ function randomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-export function getRandomDelay(min: number, max: number): number {
-  return randomInt(min, max);
+export function getRandomDelay(options: GetRandomDelayOptions): number {
+  return randomInt(options.min, options.max);
 }
 
 export function maskSecret(text: string): string {
@@ -34,25 +39,22 @@ export function formatWaitMs(ms: number): string {
 }
 
 /** Fixed delay. Logs planned duration before waiting starts. */
-export async function wait(ms: number, reason?: string): Promise<void> {
-  if (reason) {
-    logger.wait(`Waiting ${formatWaitMs(ms)} — ${reason}`);
+export async function wait(options: WaitOptions): Promise<void> {
+  if (options.reason) {
+    logger.wait(`Waiting ${formatWaitMs(options.ms)} — ${options.reason}`);
   }
 
   await new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
+    setTimeout(resolve, options.ms);
   });
 }
 
 /** Async wait (selector, network, modal, etc.). Logs before waiting; pass maxMs when there is a timeout. */
-export async function waitUntil<T>(
-  reason: string,
-  operation: () => Promise<T>,
-  maxMs?: number,
-): Promise<T> {
-  const maxLabel = maxMs !== undefined ? ` (max ${formatWaitMs(maxMs)})` : "";
-  logger.wait(`Waiting — ${reason}${maxLabel}`);
-  return operation();
+export async function waitUntil<T>(options: WaitUntilOptions<T>): Promise<T> {
+  const maxLabel =
+    options.maxMs !== undefined ? ` (max ${formatWaitMs(options.maxMs)})` : "";
+  logger.wait(`Waiting — ${options.reason}${maxLabel}`);
+  return options.operation();
 }
 
 export const logger = {

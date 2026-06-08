@@ -20,7 +20,7 @@ export async function closeBrowser(reason: string): Promise<void> {
   try {
     await Promise.race([
       activeBrowser.close(),
-      wait(Delays.CHROME_CLOSE_TIMEOUT),
+      wait({ ms: Delays.CHROME_CLOSE_TIMEOUT }),
     ]);
   } catch {
     // best-effort — Chrome may already be gone

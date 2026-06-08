@@ -168,6 +168,23 @@ Tracks scraped codes, wiki active/expired status, per-code redeem status, and la
 
 ## File & Code Conventions
 
+### Function parameters
+
+- **3+ parameters** → use a single **options object** with a named type (see `src/types/`)
+- **1–2 parameters** → positional arguments are fine
+- Do not add new multi-arg functions; refactor callers when touching existing ones
+
+Example:
+
+```ts
+await clickElement({
+  context: page,
+  selector: genshinConfig.selectors.redeemSubmit,
+  timeout: Delays.LONG,
+  reason: "redeem submit",
+});
+```
+
 ### Folder Layout
 
 ```

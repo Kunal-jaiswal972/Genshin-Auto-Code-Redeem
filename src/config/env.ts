@@ -1,6 +1,10 @@
 import os from "node:os";
 import { z } from "zod";import { ExecutionMode } from "./constants.js";
-import { resolveChromeExecutablePath, buildChromePathSearchContext, expandChromeUserDataDir } from "./chromePaths.js";
+import {
+  expandChromeUserDataDir,
+  resolveChromeExecutablePath,
+  type ChromePathSearchContext,
+} from "./chromePaths.js";
 import {
   DEFAULT_CODE_STORE_BASE_PATH,
   resolveCodeStorePath,
@@ -79,30 +83,33 @@ export function getEnv(): AppEnv {
   // process.platform is a Node built-in ("win32" | "linux" | "darwin").
   // Used only when CHROME_EXECUTABLE_PATH is empty — see chromePaths.ts candidates.
   const localAppData = process.env.LOCALAPPDATA ?? os.homedir();
-  const chromeSearchContext = buildChromePathSearchContext(
+  const chromeSearchContext: ChromePathSearchContext = {
     localAppData,
-    process.platform,
-    process.env.PROGRAMFILES,
-    process.env["PROGRAMFILES(X86)"],
-  );
+    platform: process.platform,
+    programFiles: process.env.PROGRAMFILES,
+    programFilesX86: process.env["PROGRAMFILES(X86)"],
+  };
 
-  const chromeUserDataDir = expandChromeUserDataDir(
-    raw.CHROME_USER_DATA_DIR,
+  const chromeUserDataDir = expandChromeUserDataDir({
+    configuredDir: raw.CHROME_USER_DATA_DIR,
     localAppData,
-  );
+  });
 
   const chromeExecutablePath = raw.CHROME_EXECUTABLE_PATH?.trim();
-  const codeStorePath = resolveCodeStorePath(raw.CODE_STORE_BASE_PATH, gameId);
+  const codeStorePath = resolveCodeStorePath({
+    basePath: raw.CODE_STORE_BASE_PATH,
+    gameId,
+  });
 
   cachedEnv = {
     executionMode: raw.EXECUTION_MODE,
     gameId,
     codeStorePath,
     chrome: {
-      executablePath: resolveChromeExecutablePath(
-        chromeExecutablePath,
-        chromeSearchContext,
-      ),
+      executablePath: resolveChromeExecutablePath({
+        configuredPath: chromeExecutablePath,
+        searchContext: chromeSearchContext,
+      }),
       userDataDir: chromeUserDataDir,
       debugPort: raw.CHROME_DEBUG_PORT,
       headless: raw.HEADLESS,

@@ -42,11 +42,11 @@ export async function runOrchestrator(
   let scraped = false;
 
   try {
-    const gate = await resolveScrapeGate(
-      env.executionMode,
-      env.gameId,
-      manualInput?.shouldScrape ?? null,
-    );
+    const gate = await resolveScrapeGate({
+      executionMode: env.executionMode,
+      gameId: env.gameId,
+      manualShouldScrape: manualInput?.shouldScrape ?? null,
+    });
 
     logger.gray(gate.reason);
 
@@ -57,7 +57,6 @@ export async function runOrchestrator(
       logger.info("Skipping scrape step.");
     }
 
-    const credentials = env.credentials;
     const shouldLaunchBrowser = await hasRedeemableCodesForGame(env.gameId);
 
     if (!shouldLaunchBrowser) {
@@ -66,7 +65,11 @@ export async function runOrchestrator(
     }
 
     session = await launchChromeSession(buildChromeLaunchOptions());
-    const redeemSummary = await redeemCodes(env.gameId, session, credentials);
+    const redeemSummary = await redeemCodes({
+      gameId: env.gameId,
+      session,
+      credentials: env.credentials,
+    });
 
     logRunSummary(redeemSummary);
     logger.success("Run completed successfully.");

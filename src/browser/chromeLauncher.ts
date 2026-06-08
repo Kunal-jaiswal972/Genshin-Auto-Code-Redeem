@@ -70,10 +70,10 @@ async function fetchWebSocketDebuggerUrl(
       // endpoint not up yet
     }
 
-    await wait(
-      Delays.WS_FETCH_INTERVAL,
-      `Chrome debug port to respond (attempt ${attempt}/${BrowserConfig.WS_FETCH_RETRIES})`,
-    );
+    await wait({
+      ms: Delays.WS_FETCH_INTERVAL,
+      reason: `Chrome debug port to respond (attempt ${attempt}/${BrowserConfig.WS_FETCH_RETRIES})`,
+    });
   }
 
   throw new BrowserError(
@@ -105,7 +105,7 @@ export async function launchChromeSession(
     "Closing any existing debug-profile Chrome (normal Chrome is left alone)...",
   );
   killExistingDebugChrome(options.userDataDir);
-  await wait(Delays.POST_KILL, "debug-profile Chrome processes to exit");
+  await wait({ ms: Delays.POST_KILL, reason: "debug-profile Chrome processes to exit" });
 
   logger.gray(`Using Chrome: ${options.executablePath}`);
   logger.info(
@@ -123,7 +123,7 @@ export async function launchChromeSession(
   });
   bindBrowser(browser);
 
-  const page = await openPage(browser, "about:blank");
+  const page = await openPage({ browser, url: "about:blank" });
 
   const viewport = await page.evaluate(() => ({
     width: window.screen.width,

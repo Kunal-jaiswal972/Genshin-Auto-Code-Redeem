@@ -1,6 +1,17 @@
 import type { Browser, Frame, Page } from "puppeteer-core";
 import { BrowserConfig, Delays } from "../config/constants.js";
-import { BrowserError } from "../core/errors.js";import type { PageContext } from "../types/browser.js";
+import { BrowserError } from "../core/errors.js";
+import type {
+  ClearInputOptions,
+  ClickElementOptions,
+  EnterTextOptions,
+  EvaluateClickOptions,
+  GetLoginFrameOptions,
+  OpenPageOptions,
+  PageContext,
+  ReadElementTextOptions,
+  WaitForNetworkIdleOptions,
+} from "../types/browser.js";
 import { getRandomDelay, logger, waitUntil } from "../utils/utils.js";
 
 function configurePage(page: Page): void {
@@ -8,34 +19,39 @@ function configurePage(page: Page): void {
   page.setDefaultNavigationTimeout(BrowserConfig.NAVIGATION_TIMEOUT);
 }
 
-export async function openPage(browser: Browser, url: string): Promise<Page> {
-  logger.gray(`Opening page: ${url}`);
-  const page = await browser.newPage();
+export async function openPage(options: OpenPageOptions): Promise<Page> {
+  logger.gray(`Opening page: ${options.url}`);
+  const page = await options.browser.newPage();
   configurePage(page);
-  await page.goto(url, { waitUntil: "domcontentloaded" });
+  await page.goto(options.url, { waitUntil: "domcontentloaded" });
   return page;
 }
 
 export async function waitForNetworkIdle(
-  page: Page,
-  timeout: number = Delays.LONG,
-  reason: string = "page network to settle",
+  options: WaitForNetworkIdleOptions,
 ): Promise<void> {
-  await waitUntil(reason, () => page.waitForNetworkIdle({ timeout }), timeout);
+  const timeout = options.timeout ?? Delays.LONG;
+  const reason = options.reason ?? "page network to settle";
+
+  await waitUntil({
+    reason,
+    operation: () => options.page.waitForNetworkIdle({ timeout }),
+    maxMs: timeout,
+  });
 }
 
-export async function evaluateClick(
-  page: Page,
-  selector: string,
-  timeout: number = Delays.LONG,
-  reason?: string,
-): Promise<void> {
-  await waitUntil(
-    reason ?? `evaluate click (${selector})`,
-    async () => {
-      await page.waitForSelector(selector, { visible: true, timeout });
+export async function evaluateClick(options: EvaluateClickOptions): Promise<void> {
+  const timeout = options.timeout ?? Delays.LONG;
 
-      const clicked = await page.evaluate((sel) => {
+  await waitUntil({
+    reason: options.reason ?? `evaluate click (${options.selector})`,
+    operation: async () => {
+      await options.page.waitForSelector(options.selector, {
+        visible: true,
+        timeout,
+      });
+
+      const clicked = await options.page.evaluate((sel) => {
         const element = document.querySelector(sel);
         if (!(element instanceof HTMLElement)) {
           return false;
@@ -43,105 +59,98 @@ export async function evaluateClick(
 
         element.click();
         return true;
-      }, selector);
+      }, options.selector);
 
       if (!clicked) {
-        throw new BrowserError(`Could not click element: ${selector}`);
+        throw new BrowserError(`Could not click element: ${options.selector}`);
       }
     },
-    timeout,
-  );
+    maxMs: timeout,
+  });
 }
 
 export async function readElementText(
-  page: Page,
-  selector: string,
-  timeout: number = Delays.LONG,
+  options: ReadElementTextOptions,
 ): Promise<string> {
-  await page.waitForSelector(selector, { visible: true, timeout });
+  const timeout = options.timeout ?? Delays.LONG;
 
-  return page.evaluate((sel) => {
+  await options.page.waitForSelector(options.selector, {
+    visible: true,
+    timeout,
+  });
+
+  return options.page.evaluate((sel) => {
     const element = document.querySelector(sel);
     return element?.textContent?.trim() ?? "";
-  }, selector);
+  }, options.selector);
 }
 
-export async function clickElement(
-  context: PageContext,
-  selector: string,
-  timeout: number = Delays.LONG,
-  reason?: string,
-): Promise<void> {
-  await waitUntil(
-    reason ?? `clickable element (${selector})`,
-    async () => {
-      const element = await context.waitForSelector(selector, {
+export async function clickElement(options: ClickElementOptions): Promise<void> {
+  const timeout = options.timeout ?? Delays.LONG;
+
+  await waitUntil({
+    reason: options.reason ?? `clickable element (${options.selector})`,
+    operation: async () => {
+      const element = await options.context.waitForSelector(options.selector, {
         visible: true,
         timeout,
       });
 
       if (!element) {
-        throw new BrowserError(`Element not found for selector: ${selector}`);
+        throw new BrowserError(`Element not found for selector: ${options.selector}`);
       }
 
       await element.click();
     },
-    timeout,
-  );
-}
-
-export async function enterText(
-  context: PageContext,
-  selector: string,
-  text: string,
-  reason?: string,
-): Promise<void> {
-  const element = await waitUntil(
-    reason ?? `input field (${selector})`,
-    () =>
-      context.waitForSelector(selector, {
-        visible: true,
-        timeout: Delays.LONG,
-      }),
-    Delays.LONG,
-  );
-
-  if (!element) {
-    throw new BrowserError(`Input not found for selector: ${selector}`);
-  }
-
-  await element.type(text, {
-    delay: getRandomDelay(Delays.TYPE_MIN, Delays.TYPE_MAX),
+    maxMs: timeout,
   });
 }
 
-export async function clearInput(
-  context: PageContext,
-  selector: string,
-): Promise<void> {
-  await context.$eval(selector, (element) => {
+export async function enterText(options: EnterTextOptions): Promise<void> {
+  const element = await waitUntil({
+    reason: options.reason ?? `input field (${options.selector})`,
+    operation: () =>
+      options.context.waitForSelector(options.selector, {
+        visible: true,
+        timeout: Delays.LONG,
+      }),
+    maxMs: Delays.LONG,
+  });
+
+  if (!element) {
+    throw new BrowserError(`Input not found for selector: ${options.selector}`);
+  }
+
+  await element.type(options.text, {
+    delay: getRandomDelay({ min: Delays.TYPE_MIN, max: Delays.TYPE_MAX }),
+  });
+}
+
+export async function clearInput(options: ClearInputOptions): Promise<void> {
+  await options.context.$eval(options.selector, (element) => {
     const input = element as HTMLInputElement;
     input.value = "";
   });
 }
 
-export async function getLoginFrame(
-  page: Page,
-  iframeSelector: string,
-): Promise<Frame> {
-  logger.gray(`Looking for login iframe — ${iframeSelector}`);
+export async function getLoginFrame(options: GetLoginFrameOptions): Promise<Frame> {
+  logger.gray(`Looking for login iframe — ${options.iframeSelector}`);
 
-  const frameHandle = await page.$(iframeSelector);
+  const frameHandle = await options.page.$(options.iframeSelector);
 
   if (!frameHandle) {
-    throw new BrowserError(`Login iframe not found: ${iframeSelector}`);
+    throw new BrowserError(`Login iframe not found: ${options.iframeSelector}`);
   }
 
   const frame = await frameHandle.contentFrame();
 
   if (!frame) {
-    throw new BrowserError(`Could not access login iframe: ${iframeSelector}`);
+    throw new BrowserError(
+      `Could not access login iframe: ${options.iframeSelector}`,
+    );
   }
 
   return frame;
 }
+
+export type { PageContext };

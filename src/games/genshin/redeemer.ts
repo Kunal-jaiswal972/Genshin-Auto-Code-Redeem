@@ -4,7 +4,6 @@ import { RedeemError } from "../../core/errors.js";
 import type { ChromeSession } from "../../types/browser.js";
 import type {
   CodeRedeemResult,
-  GameLoginCredentials,
   GameRedeemOptions,
 } from "../../types/redeem.js";
 import {
@@ -35,21 +34,21 @@ import {
 import { parseRedeemMessage } from "../hoyoverse/parseRedeemMessage.js";
 
 async function isLoggedIn(page: Page): Promise<boolean> {
-  const userButton = await waitUntil(
-    "login check (account button)",
-    () =>
+  const userButton = await waitUntil({
+    reason: "login check (account button)",
+    operation: () =>
       page.waitForSelector(genshinConfig.selectors.userButton, {
         visible: true,
         timeout: Delays.LONG,
       }),
-    Delays.LONG,
-  );
+    maxMs: Delays.LONG,
+  });
 
   if (!userButton) {
     return false;
   }
 
-  await wait(Delays.SHORT, "account button label to load");
+  await wait({ ms: Delays.SHORT, reason: "account button label to load" });
 
   const label = await page.evaluate(
     (element) => element.textContent?.trim() ?? "",
@@ -66,28 +65,55 @@ async function loginToGenshin(
 ): Promise<void> {
   const accountLabel = formatAccountLabel(email);
 
-  await clickElement(page, genshinConfig.selectors.userButton, Delays.LONG, "account menu");
-  await waitForNetworkIdle(page, Delays.LONG, "login dialog to load");
+  await clickElement({
+    context: page,
+    selector: genshinConfig.selectors.userButton,
+    timeout: Delays.LONG,
+    reason: "account menu",
+  });
+  await waitForNetworkIdle({
+    page,
+    timeout: Delays.LONG,
+    reason: "login dialog to load",
+  });
 
-  const frame = await getLoginFrame(page, genshinConfig.selectors.loginIframe);
-  await wait(Delays.SHORT, "login iframe to initialize");
+  const frame = await getLoginFrame({
+    page,
+    iframeSelector: genshinConfig.selectors.loginIframe,
+  });
+  await wait({ ms: Delays.SHORT, reason: "login iframe to initialize" });
 
-  await enterText(frame, genshinConfig.selectors.emailInput, email, "email field");
+  await enterText({
+    context: frame,
+    selector: genshinConfig.selectors.emailInput,
+    text: email,
+    reason: "email field",
+  });
   logger.gray(`Email entered: ${maskSecret(email)}`);
-  await wait(
-    getRandomDelay(Delays.RANDOM_ACTION_MIN, Delays.RANDOM_ACTION_MAX),
-    "after entering email",
-  );
+  await wait({
+    ms: getRandomDelay({ min: Delays.RANDOM_ACTION_MIN, max: Delays.RANDOM_ACTION_MAX }),
+    reason: "after entering email",
+  });
 
-  await enterText(frame, genshinConfig.selectors.passwordInput, password, "password field");
+  await enterText({
+    context: frame,
+    selector: genshinConfig.selectors.passwordInput,
+    text: password,
+    reason: "password field",
+  });
   logger.gray("Password entered: ********");
-  await wait(
-    getRandomDelay(Delays.RANDOM_ACTION_MIN, Delays.RANDOM_ACTION_MAX),
-    "after entering password",
-  );
+  await wait({
+    ms: getRandomDelay({ min: Delays.RANDOM_ACTION_MIN, max: Delays.RANDOM_ACTION_MAX }),
+    reason: "after entering password",
+  });
 
-  await clickElement(frame, genshinConfig.selectors.loginSubmit, Delays.LONG, "login submit");
-  await wait(Delays.LONG, "login request to complete");
+  await clickElement({
+    context: frame,
+    selector: genshinConfig.selectors.loginSubmit,
+    timeout: Delays.LONG,
+    reason: "login submit",
+  });
+  await wait({ ms: Delays.LONG, reason: "login request to complete" });
 
   const loggedIn = await isLoggedIn(page);
 
@@ -136,8 +162,11 @@ async function ensureLoggedIn(
       }
 
       await activePage.close();
-      activePage = await openPage(browser, genshinConfig.redeemPageUrl);
-      await wait(Delays.LONG, "before retrying login");
+      activePage = await openPage({
+        browser,
+        url: genshinConfig.redeemPageUrl,
+      });
+      await wait({ ms: Delays.LONG, reason: "before retrying login" });
     }
   }
 
@@ -160,11 +189,11 @@ async function selectServer(
   page: Page,
   server: GenshinServerValue,
 ): Promise<void> {
-  const currentLabel = await readElementText(
+  const currentLabel = await readElementText({
     page,
-    genshinConfig.selectors.serverButton,
-    Delays.LONG,
-  );
+    selector: genshinConfig.selectors.serverButton,
+    timeout: Delays.LONG,
+  });
 
   if (serverLabelMatches(currentLabel, server)) {
     logger.gray(`Server already selected: ${server}`);
@@ -174,16 +203,21 @@ async function selectServer(
   const nthChild = genshinServerNthChild[server];
   const serverSelector = getServerMenuSelector(nthChild);
 
-  await evaluateClick(
+  await evaluateClick({
     page,
-    genshinConfig.selectors.serverButton,
-    Delays.LONG,
-    "open server dropdown",
-  );
-  await wait(Delays.SHORT, "server dropdown to open");
-  await evaluateClick(page, serverSelector, Delays.LONG, `select server: ${server}`);
+    selector: genshinConfig.selectors.serverButton,
+    timeout: Delays.LONG,
+    reason: "open server dropdown",
+  });
+  await wait({ ms: Delays.SHORT, reason: "server dropdown to open" });
+  await evaluateClick({
+    page,
+    selector: serverSelector,
+    timeout: Delays.LONG,
+    reason: `select server: ${server}`,
+  });
   logger.gray(`Server selected: ${server}`);
-  await wait(Delays.SHORT, "apply server selection");
+  await wait({ ms: Delays.SHORT, reason: "apply server selection" });
 }
 
 async function isRedeemModalOpen(page: Page): Promise<boolean> {
@@ -225,7 +259,7 @@ async function dismissRedeemModal(page: Page): Promise<void> {
       await page.keyboard.press("Escape");
     }
 
-    await wait(500, "redeem modal to close");
+    await wait({ ms: 500, reason: "redeem modal to close" });
   } catch {
     logger.warn("Could not dismiss redeem modal — continuing.");
   }
@@ -244,7 +278,7 @@ async function ensureRedeemModalClosed(page: Page): Promise<void> {
       return;
     }
 
-    await wait(genshinConfig.modalPollIntervalMs);
+    await wait({ ms: genshinConfig.modalPollIntervalMs });
   }
 
   logger.warn("Redeem modal still open — continuing anyway.");
@@ -280,7 +314,7 @@ async function waitForRedeemModalMessage(page: Page): Promise<string> {
       return text;
     }
 
-    await wait(genshinConfig.modalPollIntervalMs);
+    await wait({ ms: genshinConfig.modalPollIntervalMs });
   }
 
   return "";
@@ -292,11 +326,24 @@ async function redeemSingleCode(
 ): Promise<CodeRedeemResult> {
   for (let attempt = 1; attempt <= genshinConfig.maxRedeemRetries; attempt += 1) {
     await ensureRedeemModalClosed(page);
-    await clearInput(page, genshinConfig.selectors.redeemInput);
-    await enterText(page, genshinConfig.selectors.redeemInput, code, "redeem code input");
+    await clearInput({ context: page, selector: genshinConfig.selectors.redeemInput });
+    await enterText({
+      context: page,
+      selector: genshinConfig.selectors.redeemInput,
+      text: code,
+      reason: "redeem code input",
+    });
     logger.gray(`Submitting code: ${code}${attempt > 1 ? ` (retry ${attempt})` : ""}`);
-    await wait(getRandomDelay(100, 500), "before submitting code");
-    await clickElement(page, genshinConfig.selectors.redeemSubmit, Delays.LONG, "redeem submit");
+    await wait({
+      ms: getRandomDelay({ min: 100, max: 500 }),
+      reason: "before submitting code",
+    });
+    await clickElement({
+      context: page,
+      selector: genshinConfig.selectors.redeemSubmit,
+      timeout: Delays.LONG,
+      reason: "redeem submit",
+    });
 
     const feedback = await waitForRedeemModalMessage(page);
     const parsed = parseRedeemMessage(feedback);
@@ -326,7 +373,7 @@ async function redeemSingleCode(
     if (parsed.action === "retry") {
       await dismissRedeemModal(page);
       await ensureRedeemModalClosed(page);
-      await wait(genshinConfig.redeemCooldownMs, "redeem cooldown before retry");
+      await wait({ ms: genshinConfig.redeemCooldownMs, reason: "redeem cooldown before retry" });
       continue;
     }
 
@@ -339,7 +386,7 @@ async function redeemSingleCode(
       await dismissRedeemModal(page);
       await ensureRedeemModalClosed(page);
       logger.warn(`No modal response for ${code} — retrying submit.`);
-      await wait(genshinConfig.redeemCooldownMs, "no modal response, retrying");
+      await wait({ ms: genshinConfig.redeemCooldownMs, reason: "no modal response, retrying" });
       continue;
     }
 
@@ -347,7 +394,7 @@ async function redeemSingleCode(
       await dismissRedeemModal(page);
       await ensureRedeemModalClosed(page);
       logger.warn(`Redeem inconclusive for ${code} — retrying submit.`);
-      await wait(genshinConfig.redeemCooldownMs, "inconclusive response, retrying");
+      await wait({ ms: genshinConfig.redeemCooldownMs, reason: "inconclusive response, retrying" });
       continue;
     }
 
@@ -389,7 +436,7 @@ export async function redeemGenshinCodes(
 
   logger.gray(`Navigating to redeem page for ${accountLabel}...`);
   await page.goto(genshinConfig.redeemPageUrl, { waitUntil: "domcontentloaded" });
-  await wait(Delays.SHORT, "redeem page to load");
+  await wait({ ms: Delays.SHORT, reason: "redeem page to load" });
   logger.gray(`Navigated to ${genshinConfig.redeemPageUrl}`);
 
   page = await ensureLoggedIn(
@@ -418,7 +465,7 @@ export async function redeemGenshinCodes(
     const hasMoreCodes = index < codes.length - 1;
     if (hasMoreCodes) {
       await ensureRedeemModalClosed(page);
-      await wait(genshinConfig.redeemCooldownMs, "between redeem codes");
+      await wait({ ms: genshinConfig.redeemCooldownMs, reason: "between redeem codes" });
     }
   }
 

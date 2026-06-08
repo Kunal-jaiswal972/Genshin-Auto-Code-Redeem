@@ -1,11 +1,10 @@
 import path from "node:path";
-import type { GameIdValue } from "../config/constants.js";
+import type { ResolveCodeStorePathOptions } from "../types/codeStore.js";
 
 export const DEFAULT_CODE_STORE_BASE_PATH = "./src/data";
 
 export function resolveCodeStorePath(
-  basePath: string,
-  gameId: GameIdValue,
+  options: ResolveCodeStorePathOptions,
 ): string {
-  return path.resolve(basePath, gameId, "codes.json");
+  return path.resolve(options.basePath, options.gameId, "codes.json");
 }

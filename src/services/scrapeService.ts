@@ -11,11 +11,11 @@ export async function runScrape(gameId: GameIdValue): Promise<ScrapeStats> {
   logger.gray(`Fetching codes for ${gameModule.displayName}...`);
   const rows = await gameModule.scrapeCodes();
   const normalized = normalizeScrapedRows(rows);
-  const merge = await mergeScrapedCodes(
+  const merge = await mergeScrapedCodes({
     gameId,
-    normalized,
-    gameModule.source,
-  );
+    scraped: normalized,
+    source: gameModule.source,
+  });
 
   logger.success(
     `Scrape saved — codes: ${normalized.length}, new: ${merge.newCodes.length}, active: ${merge.activeCodes}, expired: ${merge.expiredCodes}`,

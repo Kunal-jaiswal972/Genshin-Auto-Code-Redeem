@@ -17,6 +17,16 @@ export interface ChromePathSearchContext {
   programFilesX86?: string;
 }
 
+export interface ResolveChromeExecutablePathOptions {
+  configuredPath?: string;
+  searchContext: ChromePathSearchContext;
+}
+
+export interface ExpandChromeUserDataDirOptions {
+  configuredDir?: string;
+  localAppData: string;
+}
+
 export function getChromeCandidates(context: ChromePathSearchContext): string[] {
   const candidates: string[] = [];
 
@@ -76,16 +86,15 @@ export function getChromeCandidates(context: ChromePathSearchContext): string[] 
 }
 
 export function resolveChromeExecutablePath(
-  configuredPath: string | undefined,
-  context: ChromePathSearchContext,
+  options: ResolveChromeExecutablePathOptions,
 ): string {
-  const trimmed = configuredPath?.trim();
+  const trimmed = options.configuredPath?.trim();
 
   if (trimmed && trimmed.length > 0 && fs.existsSync(trimmed)) {
     return trimmed;
   }
 
-  for (const candidate of getChromeCandidates(context)) {
+  for (const candidate of getChromeCandidates(options.searchContext)) {
     if (fs.existsSync(candidate)) {
       return candidate;
     }
@@ -96,30 +105,15 @@ export function resolveChromeExecutablePath(
   );
 }
 
-export function buildChromePathSearchContext(
-  localAppData: string,
-  platform: NodeJS.Platform,
-  programFiles?: string,
-  programFilesX86?: string,
-): ChromePathSearchContext {
-  return {
-    platform,
-    localAppData,
-    programFiles,
-    programFilesX86,
-  };
-}
-
 export function expandChromeUserDataDir(
-  configuredDir: string | undefined,
-  localAppData: string,
+  options: ExpandChromeUserDataDirOptions,
 ): string {
-  const trimmed = configuredDir?.trim();
+  const trimmed = options.configuredDir?.trim();
 
   const resolved =
     trimmed && trimmed.length > 0
       ? trimmed
-      : path.join(localAppData, "Google", "Chrome", "DebugProfile");
+      : path.join(options.localAppData, "Google", "Chrome", "DebugProfile");
 
-  return resolved.replace(/%LOCALAPPDATA%/gi, localAppData);
+  return resolved.replace(/%LOCALAPPDATA%/gi, options.localAppData);
 }
