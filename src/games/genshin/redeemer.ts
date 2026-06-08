@@ -20,8 +20,10 @@ import {
   clearInput,
   clickElement,
   enterText,
+  evaluateClick,
   getLoginFrame,
   openPage,
+  readElementText,
   waitForNetworkIdle,
 } from "../../browser/pageActions.js";
 import {
@@ -142,16 +144,44 @@ async function ensureLoggedIn(
   return activePage;
 }
 
+function serverLabelMatches(label: string, server: GenshinServerValue): boolean {
+  const normalizedLabel = label.toLowerCase();
+  const normalizedServer = server.toLowerCase();
+
+  if (normalizedLabel.includes(normalizedServer)) {
+    return true;
+  }
+
+  const firstToken = normalizedServer.split(/[,\s]+/)[0] ?? normalizedServer;
+  return firstToken.length > 0 && normalizedLabel.includes(firstToken);
+}
+
 async function selectServer(
   page: Page,
   server: GenshinServerValue,
 ): Promise<void> {
+  const currentLabel = await readElementText(
+    page,
+    genshinConfig.selectors.serverButton,
+    Delays.LONG,
+  );
+
+  if (serverLabelMatches(currentLabel, server)) {
+    logger.gray(`Server already selected: ${server}`);
+    return;
+  }
+
   const nthChild = genshinServerNthChild[server];
   const serverSelector = getServerMenuSelector(nthChild);
 
-  await clickElement(page, genshinConfig.selectors.serverButton, Delays.LONG, "open server dropdown");
+  await evaluateClick(
+    page,
+    genshinConfig.selectors.serverButton,
+    Delays.LONG,
+    "open server dropdown",
+  );
   await wait(Delays.SHORT, "server dropdown to open");
-  await clickElement(page, serverSelector, Delays.LONG, `select server: ${server}`);
+  await evaluateClick(page, serverSelector, Delays.LONG, `select server: ${server}`);
   logger.gray(`Server selected: ${server}`);
   await wait(Delays.SHORT, "apply server selection");
 }

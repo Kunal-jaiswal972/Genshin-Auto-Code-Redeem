@@ -117,7 +117,10 @@ export async function launchChromeSession(
   const browserWSEndpoint = await fetchWebSocketDebuggerUrl(options.debugPort);
   logger.gray(`Connected to: ${browserWSEndpoint}`);
 
-  const browser = await puppeteer.connect({ browserWSEndpoint });
+  const browser = await puppeteer.connect({
+    browserWSEndpoint,
+    protocolTimeout: BrowserConfig.PROTOCOL_TIMEOUT,
+  });
   bindBrowser(browser);
 
   const page = await openPage(browser, "about:blank");

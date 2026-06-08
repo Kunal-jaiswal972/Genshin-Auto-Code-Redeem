@@ -1,12 +1,17 @@
 import type { Browser, Frame, Page } from "puppeteer-core";
-import { Delays } from "../config/constants.js";
-import { BrowserError } from "../core/errors.js";
-import type { PageContext } from "../types/browser.js";
+import { BrowserConfig, Delays } from "../config/constants.js";
+import { BrowserError } from "../core/errors.js";import type { PageContext } from "../types/browser.js";
 import { getRandomDelay, logger, waitUntil } from "../utils/utils.js";
+
+function configurePage(page: Page): void {
+  page.setDefaultTimeout(BrowserConfig.PAGE_TIMEOUT);
+  page.setDefaultNavigationTimeout(BrowserConfig.NAVIGATION_TIMEOUT);
+}
 
 export async function openPage(browser: Browser, url: string): Promise<Page> {
   logger.gray(`Opening page: ${url}`);
   const page = await browser.newPage();
+  configurePage(page);
   await page.goto(url, { waitUntil: "domcontentloaded" });
   return page;
 }
@@ -17,6 +22,48 @@ export async function waitForNetworkIdle(
   reason: string = "page network to settle",
 ): Promise<void> {
   await waitUntil(reason, () => page.waitForNetworkIdle({ timeout }), timeout);
+}
+
+export async function evaluateClick(
+  page: Page,
+  selector: string,
+  timeout: number = Delays.LONG,
+  reason?: string,
+): Promise<void> {
+  await waitUntil(
+    reason ?? `evaluate click (${selector})`,
+    async () => {
+      await page.waitForSelector(selector, { visible: true, timeout });
+
+      const clicked = await page.evaluate((sel) => {
+        const element = document.querySelector(sel);
+        if (!(element instanceof HTMLElement)) {
+          return false;
+        }
+
+        element.click();
+        return true;
+      }, selector);
+
+      if (!clicked) {
+        throw new BrowserError(`Could not click element: ${selector}`);
+      }
+    },
+    timeout,
+  );
+}
+
+export async function readElementText(
+  page: Page,
+  selector: string,
+  timeout: number = Delays.LONG,
+): Promise<string> {
+  await page.waitForSelector(selector, { visible: true, timeout });
+
+  return page.evaluate((sel) => {
+    const element = document.querySelector(sel);
+    return element?.textContent?.trim() ?? "";
+  }, selector);
 }
 
 export async function clickElement(

@@ -68,6 +68,9 @@ export const Delays = {
 
 export const BrowserConfig = {
   WS_FETCH_RETRIES: 20,
+  PROTOCOL_TIMEOUT: 180_000,
+  PAGE_TIMEOUT: 30_000,
+  NAVIGATION_TIMEOUT: 60_000,
 } as const;
 
 export const DATE_FORMAT_RUN = "YYYY-MM-DD";
