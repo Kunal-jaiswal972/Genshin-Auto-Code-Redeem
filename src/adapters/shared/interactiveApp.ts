@@ -3,7 +3,7 @@ import type { TaskSource } from "../../domain/task/redeemTask.js";
 import { getRunHistoryStore } from "../../infrastructure/storage/persistence.js";
 import type { TaskScheduler } from "../../scheduling/scheduler.js";
 import type { PromptPort } from "../ports/promptPort.js";
-import { displayRunResult, formatScheduledTaskLine } from "./utils.js";
+import { displayRunResult, formatRunHistoryLine, formatScheduledTaskLine } from "./utils.js";
 import { runNowFlow } from "./flows/runNowFlow.js";
 import { scheduleFlow } from "./flows/scheduleFlow.js";
 
@@ -83,9 +83,7 @@ export async function runInteractiveApp(
 
       port.info(`Recent runs (${entries.length}):`);
       for (const entry of entries) {
-        port.gray(
-          `  ${entry.finishedAt} — ${entry.gameId} — ${entry.status} — source: ${entry.source}`,
-        );
+        port.gray(`  ${formatRunHistoryLine(entry)}`);
       }
 
       continue;

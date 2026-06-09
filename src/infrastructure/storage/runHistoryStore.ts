@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { RedeemTask } from "../../domain/task/redeemTask.js";
+import type { RedeemSummary } from "../../domain/result/redeemSummary.js";
 import type { RunResult } from "../../domain/result/runResult.js";
 import { getSqliteDatabase } from "./sqlite/database.js";
 
@@ -14,6 +15,7 @@ export interface RunHistoryEntry {
   finishedAt: string;
   scraped: boolean;
   error: string | null;
+  redeemSummary: RedeemSummary | null;
 }
 
 export interface RecordRunHistoryOptions {
@@ -41,6 +43,29 @@ interface RunHistoryRow {
   finished_at: string;
   scraped: number;
   error: string | null;
+  redeem_summary_json: string | null;
+}
+
+function parseRedeemSummaryJson(raw: string | null): RedeemSummary | null {
+  if (raw === null || raw.trim().length === 0) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as RedeemSummary;
+
+    if (
+      typeof parsed.redeemed !== "number" ||
+      typeof parsed.expired !== "number" ||
+      typeof parsed.stillPending !== "number"
+    ) {
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 function rowToEntry(row: RunHistoryRow): RunHistoryEntry {
@@ -55,6 +80,7 @@ function rowToEntry(row: RunHistoryRow): RunHistoryEntry {
     finishedAt: row.finished_at,
     scraped: row.scraped === 1,
     error: row.error,
+    redeemSummary: parseRedeemSummaryJson(row.redeem_summary_json),
   };
 }
 
@@ -77,7 +103,7 @@ export function createSqliteRunHistoryStore(
 
   const listRecentStmt = db.prepare(`
     SELECT id, scheduled_task_id, redeem_task_id, game_id, source, status,
-           started_at, finished_at, scraped, error
+           started_at, finished_at, scraped, error, redeem_summary_json
     FROM run_history
     ORDER BY started_at DESC
     LIMIT ?
