@@ -2,7 +2,7 @@ import { registerShutdownHandlers } from "./browser/lifecycle.js";
 import { collectManualRunInput } from "./cli/manualFlow.js";
 import { runOrchestrator } from "./core/orchestrator.js";
 import { loadEnvFile } from "./config/loadEnv.js";
-import { getEnv } from "./config/env.js";
+import { getEnv, peekExecutionMode } from "./config/env.js";
 import { ExecutionMode } from "./config/constants.js";
 import { logger } from "./utils/utils.js";
 
@@ -10,10 +10,9 @@ loadEnvFile();
 registerShutdownHandlers();
 
 async function main(): Promise<void> {
-  const env = getEnv();
-
-  if (env.executionMode === ExecutionMode.MANUAL) {
+  if (peekExecutionMode() === ExecutionMode.MANUAL) {
     const manualInput = await collectManualRunInput();
+    getEnv({ gameId: manualInput.gameId });
     await runOrchestrator(manualInput);
     return;
   }

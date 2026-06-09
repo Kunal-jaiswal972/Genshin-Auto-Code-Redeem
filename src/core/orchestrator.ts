@@ -23,7 +23,6 @@ export async function runOrchestrator(
   manualInput: ManualRunInput | null = null,
 ): Promise<RunSummary> {
   const env = getEnv();
-  const gameModule = getGameModule(env.gameId);
 
   if (env.executionMode === ExecutionMode.MANUAL && manualInput === null) {
     throw new ConfigError(
@@ -31,8 +30,14 @@ export async function runOrchestrator(
     );
   }
 
+  const gameId =
+    env.executionMode === ExecutionMode.MANUAL && manualInput !== null
+      ? manualInput.gameId
+      : env.gameId;
+  const gameModule = getGameModule(gameId);
+
   logger.step(
-    `Auto Code Redeemer — mode: ${env.executionMode}, game: ${gameModule.displayName} (${env.gameId})`,
+    `Auto Code Redeemer — mode: ${env.executionMode}, game: ${gameModule.displayName} (${gameId})`,
   );
   logger.gray(`Chrome profile: ${env.chrome.userDataDir}`);
   logger.gray(`Code store: ${env.codeStorePath}`);
@@ -44,20 +49,20 @@ export async function runOrchestrator(
   try {
     const gate = await resolveScrapeGate({
       executionMode: env.executionMode,
-      gameId: env.gameId,
+      gameId,
       manualShouldScrape: manualInput?.shouldScrape ?? null,
     });
 
     logger.gray(gate.reason);
 
     if (gate.shouldScrape) {
-      scrapeStats = await runScrape(env.gameId);
+      scrapeStats = await runScrape(gameId);
       scraped = true;
     } else {
       logger.info("Skipping scrape step.");
     }
 
-    const shouldLaunchBrowser = await hasRedeemableCodesForGame(env.gameId);
+    const shouldLaunchBrowser = await hasRedeemableCodesForGame(gameId);
 
     if (!shouldLaunchBrowser) {
       logger.info("No redeemable codes — skipping browser launch.");
@@ -66,7 +71,7 @@ export async function runOrchestrator(
 
     session = await launchChromeSession(buildChromeLaunchOptions());
     const redeemSummary = await redeemCodes({
-      gameId: env.gameId,
+      gameId,
       session,
       credentials: env.credentials,
     });

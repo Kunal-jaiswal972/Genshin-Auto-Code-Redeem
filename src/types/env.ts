@@ -1,6 +1,10 @@
 import type { ExecutionModeValue, GameIdValue } from "../config/constants.js";
 import type { GameLoginCredentials } from "./redeem.js";
 
+export interface GetEnvOptions {
+  gameId?: GameIdValue;
+}
+
 export interface ChromeEnvConfig {
   executablePath: string;
   userDataDir: string;

@@ -1,6 +1,8 @@
+import type { GameIdValue } from "../config/constants.js";
 import type { ScrapeStats } from "./services.js";
 
 export interface ManualRunInput {
+  gameId: GameIdValue;
   shouldScrape: boolean;
 }
 

@@ -1,5 +1,6 @@
 import os from "node:os";
-import { z } from "zod";import { ExecutionMode } from "./constants.js";
+import { z } from "zod";
+import { ExecutionMode, type ExecutionModeValue } from "./constants.js";
 import {
   expandChromeUserDataDir,
   resolveChromeExecutablePath,
@@ -13,7 +14,7 @@ import {
   getGameModule,
   registeredGameIds,
 } from "../games/registry.js";
-import type { AppEnv } from "../types/env.js";
+import type { AppEnv, GetEnvOptions } from "../types/env.js";
 
 const executionModeSchema = z.enum([
   ExecutionMode.MANUAL,
@@ -42,8 +43,16 @@ const baseEnvSchema = z.object({
 
 let cachedEnv: AppEnv | null = null;
 
-export function getEnv(): AppEnv {
-  if (cachedEnv) {
+export function peekExecutionMode(): ExecutionModeValue {
+  const result = executionModeSchema.safeParse(
+    process.env.EXECUTION_MODE ?? ExecutionMode.MANUAL,
+  );
+
+  return result.success ? result.data : ExecutionMode.MANUAL;
+}
+
+export function getEnv(options?: GetEnvOptions): AppEnv {
+  if (cachedEnv && options?.gameId === undefined) {
     return cachedEnv;
   }
 
@@ -58,7 +67,7 @@ export function getEnv(): AppEnv {
   }
 
   const raw = result.data;
-  const gameId = raw.GAME_ID;
+  const gameId = options?.gameId ?? raw.GAME_ID;
   const gameModule = getGameModule(gameId);
   let credentials;
 
