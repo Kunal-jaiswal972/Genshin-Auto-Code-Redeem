@@ -1,4 +1,4 @@
-import { logger } from "../../utils/utils.js";
+import chalk from "chalk";
 
 export type AdapterLogLevel = "debug" | "info" | "warn" | "error";
 
@@ -14,6 +14,19 @@ export interface AdapterLogger {
   error(message: string, error?: Error): void;
 }
 
+const ADAPTER_PREFIX_COLORS: Record<string, (text: string) => string> = {
+  telegram: chalk.hex("#2AABEE"),
+  cli: chalk.green,
+  server: chalk.blueBright,
+  discord: chalk.hex("#5865F2"),
+  api: chalk.magenta,
+};
+
+function colorizeAdapterPrefix(adapterId: string, prefix: string): string {
+  const colorize = ADAPTER_PREFIX_COLORS[adapterId] ?? chalk.cyan;
+  return colorize(prefix);
+}
+
 export function formatAdapterLogPrefix(
   adapterId: string,
   scope?: string | number,
@@ -25,27 +38,43 @@ export function formatAdapterLogPrefix(
   return `[${adapterId}]`;
 }
 
+function writeAdapterLogLine(
+  adapterId: string,
+  prefix: string,
+  message: string,
+  level: AdapterLogLevel,
+  error?: Error,
+): void {
+  const coloredPrefix = colorizeAdapterPrefix(adapterId, prefix);
+
+  switch (level) {
+    case "info":
+      console.log(`${coloredPrefix} ${chalk.cyan(message)}`);
+      break;
+    case "warn":
+      console.log(`${coloredPrefix} ${chalk.yellow(message)}`);
+      break;
+    case "error":
+      if (error) {
+        console.error(`${coloredPrefix} ${chalk.red(message)}`, error.message);
+        break;
+      }
+
+      console.error(`${coloredPrefix} ${chalk.red(message)}`);
+      break;
+    default:
+      console.log(`${coloredPrefix} ${chalk.gray(message)}`);
+  }
+}
+
 export function logAdapter(
   adapterId: string,
   message: string,
   options?: AdapterLogOptions,
 ): void {
-  const line = `${formatAdapterLogPrefix(adapterId, options?.scope)} ${message}`;
+  const prefix = formatAdapterLogPrefix(adapterId, options?.scope);
   const level = options?.level ?? "debug";
-
-  switch (level) {
-    case "info":
-      logger.info(line);
-      break;
-    case "warn":
-      logger.warn(line);
-      break;
-    case "error":
-      logger.error(line);
-      break;
-    default:
-      logger.gray(line);
-  }
+  writeAdapterLogLine(adapterId, prefix, message, level);
 }
 
 export function createAdapterLogger(
@@ -64,7 +93,7 @@ export function createAdapterLogger(
     },
     error(message: string, error?: Error): void {
       const prefix = formatAdapterLogPrefix(adapterId, scope);
-      logger.error(`${prefix} ${message}`, error);
+      writeAdapterLogLine(adapterId, prefix, message, "error", error);
     },
   };
 }
