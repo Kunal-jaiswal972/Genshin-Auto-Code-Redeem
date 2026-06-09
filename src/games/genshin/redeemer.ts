@@ -1,6 +1,6 @@
 import type { Browser, Page } from "puppeteer-core";
 import { Delays, RedeemStatus, type GenshinServerValue } from "../../config/constants.js";
-import { RedeemError } from "../../core/errors.js";
+import { RedeemError } from "../../domain/errors.js";
 import type { ChromeSession } from "../../types/browser.js";
 import type {
   CodeRedeemResult,
@@ -60,10 +60,10 @@ async function isLoggedIn(page: Page): Promise<boolean> {
 
 async function loginToGenshin(
   page: Page,
-  email: string,
+  username: string,
   password: string,
 ): Promise<void> {
-  const accountLabel = formatAccountLabel(email);
+  const accountLabel = formatAccountLabel(username);
 
   await clickElement({
     context: page,
@@ -86,13 +86,13 @@ async function loginToGenshin(
   await enterText({
     context: frame,
     selector: genshinConfig.selectors.emailInput,
-    text: email,
-    reason: "email field",
+    text: username,
+    reason: "username field",
   });
-  logger.gray(`Email entered: ${maskSecret(email)}`);
+  logger.gray(`Username entered: ${maskSecret(username)}`);
   await wait({
     ms: getRandomDelay({ min: Delays.RANDOM_ACTION_MIN, max: Delays.RANDOM_ACTION_MAX }),
-    reason: "after entering email",
+    reason: "after entering username",
   });
 
   await enterText({
@@ -118,7 +118,7 @@ async function loginToGenshin(
   const loggedIn = await isLoggedIn(page);
 
   if (!loggedIn) {
-    throw new RedeemError("Login failed: incorrect email or password.");
+    throw new RedeemError("Login failed: incorrect username or password.");
   }
 
   logger.success(`Logged in to Hoyoverse account (${accountLabel}).`);
@@ -127,10 +127,10 @@ async function loginToGenshin(
 async function ensureLoggedIn(
   browser: Browser,
   page: Page,
-  email: string,
+  username: string,
   password: string,
 ): Promise<Page> {
-  const accountLabel = formatAccountLabel(email);
+  const accountLabel = formatAccountLabel(username);
   let activePage = page;
 
   if (await isLoggedIn(activePage)) {
@@ -144,7 +144,7 @@ async function ensureLoggedIn(
 
   while (loginAttempts < genshinConfig.maxLoginAttempts) {
     try {
-      await loginToGenshin(activePage, email, password);
+      await loginToGenshin(activePage, username, password);
       return activePage;
     } catch (error) {
       loginAttempts += 1;
@@ -422,13 +422,13 @@ export async function redeemGenshinCodes(
 ): Promise<CodeRedeemResult[]> {
   const { browser } = session;
   const { credentials, codes } = options;
-  const accountLabel = formatAccountLabel(credentials.email);
+  const accountLabel = formatAccountLabel(credentials.username);
 
   if (codes.length === 0) {
     return [];
   }
 
-  if (credentials.email.length === 0 || credentials.password.length === 0) {
+  if (credentials.username.length === 0 || credentials.password.length === 0) {
     throw new RedeemError("Genshin credentials are required for redemption.");
   }
 
@@ -442,7 +442,7 @@ export async function redeemGenshinCodes(
   page = await ensureLoggedIn(
     browser,
     page,
-    credentials.email,
+    credentials.username,
     credentials.password,
   );
   await selectServer(page, isGenshinServer(credentials.server));

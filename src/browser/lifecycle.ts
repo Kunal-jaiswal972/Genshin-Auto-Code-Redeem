@@ -1,10 +1,16 @@
 import type { Browser } from "puppeteer-core";
-import { closeActivePrompt } from "../cli/prompts.js";
+import { closeActivePrompt } from "../adapters/cli/prompts.js";
 import { Delays } from "../config/constants.js";
+import { closeSqliteDatabase } from "../infrastructure/storage/sqlite/database.js";
 import { wait } from "../utils/utils.js";
 
 let activeBrowser: Browser | null = null;
 let cleaningUp = false;
+const shutdownHooks: Array<() => Promise<void>> = [];
+
+export function registerShutdownHook(hook: () => Promise<void>): void {
+  shutdownHooks.push(hook);
+}
 
 export function bindBrowser(browser: Browser): void {
   activeBrowser = browser;
@@ -41,7 +47,16 @@ async function shutdown(reason: string, exitCode: number): Promise<void> {
     // stdin may not be a TTY
   }
 
+  for (const hook of shutdownHooks) {
+    try {
+      await hook();
+    } catch {
+      // best-effort shutdown
+    }
+  }
+
   await closeBrowser(reason);
+  closeSqliteDatabase();
   process.exit(exitCode);
 }
 

@@ -1,5 +1,5 @@
 import { GameId, type GameIdValue } from "../config/constants.js";
-import { ConfigError } from "../core/errors.js";
+import { ConfigError } from "../domain/errors.js";
 import type { GameModule } from "../types/games.js";
 import { genshinGameModule } from "./genshin/index.js";
 import { hsrGameModule } from "./hsr/index.js";

@@ -6,7 +6,7 @@ import {
   hasRedeemableCodes,
   persistRedeemResult,
 } from "../storage/codeStore.js";
-import type { RedeemSummary } from "../types/orchestrator.js";
+import type { RedeemSummary } from "../domain/result/redeemSummary.js";
 import type { CodeRedeemResult } from "../types/redeem.js";
 import type {
   RedeemCodesOptions,
@@ -80,7 +80,7 @@ export async function hasRedeemableCodesForGame(
 export async function redeemCodes(
   options: RedeemCodesOptions,
 ): Promise<RedeemSummary> {
-  logger.step(`Redeeming codes for ${formatAccountLabel(options.credentials.email)}.`);
+  logger.step(`Redeeming codes for ${formatAccountLabel(options.credentials.username)}.`);
 
   const { toRedeem: codesToRedeem, skipped } = await getRedeemResumeStats(
     options.gameId,

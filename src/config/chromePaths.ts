@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { ConfigError } from "../core/errors.js";
+import { ConfigError } from "../domain/errors.js";
 
 /**
  * Inputs for auto-detecting chrome.exe when CHROME_EXECUTABLE_PATH is unset.

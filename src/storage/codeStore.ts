@@ -9,9 +9,10 @@ import {
   type GameIdValue,
   type RedeemStatusValue,
 } from "../config/constants.js";
-import { getEnv } from "../config/env.js";
 import { registeredGameIds } from "../games/registry.js";
-import { StorageError } from "../core/errors.js";
+import { getCodeStoreBasePath } from "./codeStoreContext.js";
+import { resolveCodeStorePath } from "./codeStorePath.js";
+import { StorageError } from "../domain/errors.js";
 import type { NormalizedScrapedCode } from "../types/games.js";
 import type {
   CodeStore,
@@ -92,8 +93,13 @@ function createEmptyStore(gameId: GameIdValue): CodeStore {
   };
 }
 
-function resolveStorePath(): string {
-  return path.resolve(getEnv().codeStorePath);
+function resolveStorePath(gameId: GameIdValue): string {
+  return path.resolve(
+    resolveCodeStorePath({
+      basePath: getCodeStoreBasePath(),
+      gameId,
+    }),
+  );
 }
 
 async function ensureStoreDirectory(storePath: string): Promise<void> {
@@ -103,6 +109,11 @@ async function ensureStoreDirectory(storePath: string): Promise<void> {
 async function readStoreFile(storePath: string): Promise<CodeStore | null> {
   try {
     const raw = await fs.readFile(storePath, "utf8");
+
+    if (raw.trim().length === 0) {
+      return null;
+    }
+
     const parsed = codeStoreSchema.safeParse(JSON.parse(raw));
 
     if (!parsed.success) {
@@ -143,7 +154,7 @@ async function writeStoreFile(storePath: string, store: CodeStore): Promise<void
 }
 
 async function loadCodeStore(gameId: GameIdValue): Promise<CodeStore> {
-  const storePath = resolveStorePath();
+  const storePath = resolveStorePath(gameId);
   const existing = await readStoreFile(storePath);
 
   if (!existing) {
@@ -160,7 +171,7 @@ async function loadCodeStore(gameId: GameIdValue): Promise<CodeStore> {
 }
 
 async function saveCodeStore(store: CodeStore): Promise<void> {
-  await writeStoreFile(resolveStorePath(), store);
+  await writeStoreFile(resolveStorePath(store.gameId), store);
 }
 
 export async function hasScrapedToday(gameId: GameIdValue): Promise<boolean> {

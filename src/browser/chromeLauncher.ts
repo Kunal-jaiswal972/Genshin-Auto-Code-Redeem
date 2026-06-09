@@ -3,8 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import puppeteer from "puppeteer-core";
 import { BrowserConfig, Delays } from "../config/constants.js";
-import { getEnv } from "../config/env.js";
-import { BrowserError } from "../core/errors.js";
+import { getAppConfig } from "../config/appConfig.js";
+import { BrowserError } from "../domain/errors.js";
 import type {
   ChromeLaunchOptions,
   ChromeSession,
@@ -82,7 +82,7 @@ async function fetchWebSocketDebuggerUrl(
 }
 
 export function buildChromeLaunchOptions(): ChromeLaunchOptions {
-  const { chrome } = getEnv();
+  const { chrome } = getAppConfig();
 
   return {
     executablePath: chrome.executablePath,

@@ -1,7 +1,7 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
 import type { Element } from "domhandler";
-import { ScrapeError } from "../../core/errors.js";
+import { ScrapeError } from "../../domain/errors.js";
 import type { ScrapedCodeRow } from "../../types/games.js";
 import { genshinConfig } from "./config.js";
 

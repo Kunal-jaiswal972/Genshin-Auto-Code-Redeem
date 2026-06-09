@@ -1,11 +1,3 @@
-export const ExecutionMode = {
-  MANUAL: "manual",
-  CRON: "cron",
-} as const;
-
-export type ExecutionModeValue =
-  (typeof ExecutionMode)[keyof typeof ExecutionMode];
-
 export const CodeStatus = {
   ACTIVE: "active",
   EXPIRED: "expired",

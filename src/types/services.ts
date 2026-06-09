@@ -1,4 +1,4 @@
-import type { ExecutionModeValue, GameIdValue } from "../config/constants.js";
+import type { GameIdValue } from "../config/constants.js";
 import type { ChromeSession } from "./browser.js";
 import type { GameLoginCredentials } from "./redeem.js";
 
@@ -8,18 +8,6 @@ export interface ScrapeStats {
   activeCodes: number;
   expiredCodes: number;
   newCodes: string[];
-}
-
-export interface ScrapeGateResult {
-  shouldScrape: boolean;
-  runDate: string;
-  reason: string;
-}
-
-export interface ResolveScrapeGateOptions {
-  executionMode: ExecutionModeValue;
-  gameId: GameIdValue;
-  manualShouldScrape: boolean | null;
 }
 
 export interface RedeemCodesOptions {
