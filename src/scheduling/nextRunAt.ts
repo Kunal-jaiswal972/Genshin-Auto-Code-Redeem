@@ -69,61 +69,6 @@ function computeWeekdaysNextRun(days: number[], at: string, from: Date): Date {
   throw new Error("Could not compute next weekday run time.");
 }
 
-function computeCronNextRun(expression: string, from: Date): Date {
-  const parts = expression.trim().split(/\s+/);
-
-  if (parts.length !== 5) {
-    throw new Error(
-      'Cron expression must have 5 fields: "minute hour day month weekday".',
-    );
-  }
-
-  const minute = parts[0];
-  const hour = parts[1];
-  const dayOfMonth = parts[2];
-  const month = parts[3];
-  const weekday = parts[4];
-
-  if (!minute || !hour || !dayOfMonth || !month || !weekday) {
-    throw new Error(`Invalid cron expression "${expression}".`);
-  }
-
-  if (
-    minute === "*" ||
-    dayOfMonth !== "*" ||
-    month !== "*" ||
-    weekday !== "*"
-  ) {
-    throw new Error(
-      "Only simple cron expressions are supported (minute hour * * *).",
-    );
-  }
-
-  const parsedMinute = minute === "*" ? 0 : Number.parseInt(minute, 10);
-  const parsedHour = hour === "*" ? 0 : Number.parseInt(hour, 10);
-
-  if (
-    Number.isNaN(parsedMinute) ||
-    Number.isNaN(parsedHour) ||
-    parsedMinute < 0 ||
-    parsedMinute > 59 ||
-    parsedHour < 0 ||
-    parsedHour > 23
-  ) {
-    throw new Error(`Invalid cron expression "${expression}".`);
-  }
-
-  const candidate = new Date(from);
-  candidate.setSeconds(0, 0);
-  candidate.setHours(parsedHour, parsedMinute, 0, 0);
-
-  if (candidate <= from) {
-    candidate.setDate(candidate.getDate() + 1);
-  }
-
-  return candidate;
-}
-
 export function computeNextRunAt(
   schedule: ScheduleSpec,
   from: Date = new Date(),
@@ -140,27 +85,7 @@ export function computeNextRunAt(
     }
     case "daily":
       return computeDailyNextRun(schedule.at, from).toISOString();
-    case "intervalHours": {
-      if (schedule.every < 1) {
-        throw new Error("Interval hours must be at least 1.");
-      }
-
-      return new Date(
-        from.getTime() + schedule.every * 60 * 60 * 1000,
-      ).toISOString();
-    }
-    case "intervalMinutes": {
-      if (schedule.every < 1) {
-        throw new Error("Interval minutes must be at least 1.");
-      }
-
-      return new Date(
-        from.getTime() + schedule.every * 60 * 1000,
-      ).toISOString();
-    }
     case "weekdays":
       return computeWeekdaysNextRun(schedule.days, schedule.at, from).toISOString();
-    case "cron":
-      return computeCronNextRun(schedule.expression, from).toISOString();
   }
 }
