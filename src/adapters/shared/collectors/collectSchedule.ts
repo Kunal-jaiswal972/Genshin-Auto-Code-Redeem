@@ -1,73 +1,107 @@
-import { formatWeekdayLabels } from "../../../scheduling/nextRunAt.js";
+import { isPromptBack } from "../../ports/promptBack.js";
 import type { ScheduleSpec } from "../../../scheduling/scheduleSpec.js";
 import type { PromptPort } from "../../ports/promptPort.js";
+import {
+  collectMultipleWeekdays,
+  collectOnceDateTime,
+  collectSingleWeekday,
+  collectTimeOfDay,
+} from "./collectDateTime.js";
 
 type ScheduleKind = "daily" | "weekly" | "once" | "weeklyOnce";
 
-const WEEKDAY_CHOICES = [
-  { value: "0" as const, label: "Sunday" },
-  { value: "1" as const, label: "Monday" },
-  { value: "2" as const, label: "Tuesday" },
-  { value: "3" as const, label: "Wednesday" },
-  { value: "4" as const, label: "Thursday" },
-  { value: "5" as const, label: "Friday" },
-  { value: "6" as const, label: "Saturday" },
+const SCHEDULE_KIND_CHOICES = [
+  { value: "daily" as const, label: "Every day at a set time" },
+  { value: "weekly" as const, label: "On selected days every week at a set time" },
+  { value: "once" as const, label: "Once at a specific date and time" },
+  { value: "weeklyOnce" as const, label: "Every week on one day at a set time" },
 ];
 
-async function collectDailyTime(port: PromptPort): Promise<string> {
-  return port.question("Daily time (HH:mm, 24-hour, e.g. 09:30):");
+async function collectScheduleKind(port: PromptPort): Promise<ScheduleKind> {
+  return port.choose<ScheduleKind>("How should this run?", SCHEDULE_KIND_CHOICES, {
+    allowBack: true,
+  });
 }
 
-async function collectSingleWeekday(port: PromptPort): Promise<number> {
-  const day = await port.choose("Which day of the week?", WEEKDAY_CHOICES);
-  return Number.parseInt(day, 10);
+async function collectDailySchedule(port: PromptPort): Promise<ScheduleSpec> {
+  const at = await collectTimeOfDay(port);
+  return { type: "daily", at };
 }
 
-async function collectMultipleWeekdays(port: PromptPort): Promise<number[]> {
-  const raw = await port.question(
-    `Weekdays (comma-separated numbers 0-6, e.g. 1,3,5 for ${formatWeekdayLabels([1, 3, 5])}):`,
-  );
+async function collectWeeklySchedule(port: PromptPort): Promise<ScheduleSpec> {
+  while (true) {
+    const days = await collectMultipleWeekdays(port);
 
-  const days = raw
-    .split(",")
-    .map((part) => Number.parseInt(part.trim(), 10))
-    .filter((day) => !Number.isNaN(day) && day >= 0 && day <= 6);
+    try {
+      const at = await collectTimeOfDay(port);
+      return { type: "weekdays", days, at };
+    } catch (error) {
+      if (isPromptBack(error)) {
+        continue;
+      }
 
-  if (days.length === 0) {
-    throw new Error("Select at least one weekday (0=Sun … 6=Sat).");
+      throw error;
+    }
   }
+}
 
-  return [...new Set(days)].sort((left, right) => left - right);
+async function collectWeeklyOnceSchedule(port: PromptPort): Promise<ScheduleSpec> {
+  while (true) {
+    const day = await collectSingleWeekday(port);
+
+    try {
+      const at = await collectTimeOfDay(port);
+      return { type: "weekdays", days: [day], at };
+    } catch (error) {
+      if (isPromptBack(error)) {
+        continue;
+      }
+
+      throw error;
+    }
+  }
+}
+
+async function collectScheduleForKind(
+  port: PromptPort,
+  kind: ScheduleKind,
+): Promise<ScheduleSpec> {
+  switch (kind) {
+    case "daily":
+      return collectDailySchedule(port);
+    case "weekly":
+      return collectWeeklySchedule(port);
+    case "once": {
+      const at = await collectOnceDateTime(port);
+      return { type: "once", at };
+    }
+    case "weeklyOnce":
+      return collectWeeklyOnceSchedule(port);
+  }
 }
 
 export async function collectScheduleSpec(port: PromptPort): Promise<ScheduleSpec> {
-  const kind = await port.choose<ScheduleKind>("How should this run?", [
-    { value: "daily", label: "Every day at a set time" },
-    { value: "weekly", label: "On selected days every week at a set time" },
-    { value: "once", label: "Once at a specific date and time" },
-    { value: "weeklyOnce", label: "Every week on one day at a set time" },
-  ]);
+  while (true) {
+    let kind: ScheduleKind;
 
-  switch (kind) {
-    case "daily": {
-      const at = await collectDailyTime(port);
-      return { type: "daily", at };
+    try {
+      kind = await collectScheduleKind(port);
+    } catch (error) {
+      if (isPromptBack(error)) {
+        throw error;
+      }
+
+      throw error;
     }
-    case "weekly": {
-      const days = await collectMultipleWeekdays(port);
-      const at = await collectDailyTime(port);
-      return { type: "weekdays", days, at };
-    }
-    case "once": {
-      const at = await port.question(
-        "Date/time (ISO, e.g. 2026-06-08T18:30:00):",
-      );
-      return { type: "once", at };
-    }
-    case "weeklyOnce": {
-      const day = await collectSingleWeekday(port);
-      const at = await collectDailyTime(port);
-      return { type: "weekdays", days: [day], at };
+
+    try {
+      return await collectScheduleForKind(port, kind);
+    } catch (error) {
+      if (isPromptBack(error)) {
+        continue;
+      }
+
+      throw error;
     }
   }
 }

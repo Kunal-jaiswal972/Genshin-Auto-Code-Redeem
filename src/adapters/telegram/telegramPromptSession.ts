@@ -4,6 +4,7 @@ export type PendingPromptKind = "choose" | "question" | "yesNo" | "username" | "
 
 export interface PendingPrompt {
   readonly kind: PendingPromptKind;
+  readonly allowBack?: boolean;
   readonly choices?: readonly PromptChoice[];
   readonly defaultYes?: boolean;
   readonly resolve: (value: string | boolean) => void;

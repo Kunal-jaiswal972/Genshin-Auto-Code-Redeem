@@ -1,35 +1,52 @@
-import { confirm, input, password, select } from "@inquirer/prompts";
-import readline from "node:readline";
+import * as clack from "@clack/prompts";
+import type { PromptOptions } from "../ports/promptPort.js";
+import {
+  PROMPT_BACK_CHOICE_VALUE,
+  PROMPT_BACK_LABEL,
+  PROMPT_BACK_TEXT,
+  PromptBackError,
+} from "../ports/promptBack.js";
 
-let activeRl: readline.Interface | null = null;
-
-export function closeActivePrompt(): void {
-  if (activeRl) {
-    activeRl.close();
-    activeRl = null;
-  }
+function isBackText(answer: string): boolean {
+  return answer.trim().toLowerCase() === PROMPT_BACK_TEXT;
 }
 
-export function askQuestion(prompt: string): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  activeRl = rl;
+function resolveClackCancel(allowBack: boolean): never {
+  if (allowBack) {
+    throw new PromptBackError();
+  }
 
-  rl.on("SIGINT", () => {
-    rl.close();
-    activeRl = null;
-    process.emit("SIGINT");
+  throw new Error("Prompt cancelled.");
+}
+
+function unwrapClackResult<T>(result: T | symbol, allowBack = false): T {
+  if (clack.isCancel(result)) {
+    resolveClackCancel(allowBack);
+  }
+
+  return result;
+}
+
+export function closeActivePrompt(): void {
+  // Clack manages its own readline lifecycle per prompt.
+}
+
+export async function askQuestion(prompt: string, options?: PromptOptions): Promise<string> {
+  if (!process.stdin.isTTY) {
+    return "";
+  }
+
+  const result = await clack.text({
+    message: prompt,
   });
 
-  return new Promise((resolve) => {
-    rl.question(prompt, (answer) => {
-      activeRl = null;
-      rl.close();
-      resolve(answer.trim());
-    });
-  });
+  const value = unwrapClackResult(result, options?.allowBack === true).trim();
+
+  if (options?.allowBack === true && isBackText(value)) {
+    throw new PromptBackError();
+  }
+
+  return value;
 }
 
 export interface ChoiceOption<T extends string> {
@@ -37,9 +54,51 @@ export interface ChoiceOption<T extends string> {
   label: string;
 }
 
+async function askClackChoice<T extends string>(
+  prompt: string,
+  choices: readonly ChoiceOption<T>[],
+  allowBack: boolean,
+): Promise<T> {
+  const options: { value: string; label: string }[] = [];
+
+  if (allowBack) {
+    options.push({
+      value: PROMPT_BACK_CHOICE_VALUE,
+      label: PROMPT_BACK_LABEL,
+    });
+  }
+
+  for (const choice of choices) {
+    options.push({
+      value: choice.value,
+      label: choice.label,
+    });
+  }
+
+  const firstSelectable = allowBack ? options[1] : options[0];
+
+  const result = await clack.select({
+    message: prompt,
+    options,
+    initialValue: firstSelectable?.value,
+    maxItems: Math.min(options.length, 12),
+  });
+
+  if (clack.isCancel(result)) {
+    resolveClackCancel(allowBack);
+  }
+
+  if (result === PROMPT_BACK_CHOICE_VALUE) {
+    throw new PromptBackError();
+  }
+
+  return result as T;
+}
+
 export async function askChoice<T extends string>(
   prompt: string,
   choices: readonly ChoiceOption<T>[],
+  options?: PromptOptions,
 ): Promise<T> {
   if (choices.length === 0) {
     throw new Error("askChoice requires at least one choice.");
@@ -53,13 +112,7 @@ export async function askChoice<T extends string>(
     return first.value;
   }
 
-  return select({
-    message: prompt,
-    choices: choices.map((choice) => ({
-      name: choice.label,
-      value: choice.value,
-    })),
-  });
+  return askClackChoice(prompt, choices, options?.allowBack === true);
 }
 
 export async function askUsername(message = "Username"): Promise<string> {
@@ -67,15 +120,18 @@ export async function askUsername(message = "Username"): Promise<string> {
     return askQuestion(`${message}: `);
   }
 
-  return input({
+  const result = await clack.text({
     message,
     validate: (value) => {
-      if (value.trim().length === 0) {
+      if ((value ?? "").trim().length === 0) {
         return "Username is required.";
       }
-      return true;
+
+      return undefined;
     },
   });
+
+  return unwrapClackResult(result).trim();
 }
 
 export async function askPassword(message = "Password"): Promise<string> {
@@ -83,16 +139,18 @@ export async function askPassword(message = "Password"): Promise<string> {
     return askQuestion(`${message}: `);
   }
 
-  return password({
+  const result = await clack.password({
     message,
-    mask: "*",
     validate: (value) => {
-      if (value.length === 0) {
+      if ((value ?? "").length === 0) {
         return "Password is required.";
       }
-      return true;
+
+      return undefined;
     },
   });
+
+  return unwrapClackResult(result);
 }
 
 export async function askYesNo(prompt: string, defaultYes: boolean): Promise<boolean> {
@@ -100,19 +158,38 @@ export async function askYesNo(prompt: string, defaultYes: boolean): Promise<boo
     return defaultYes;
   }
 
-  return confirm({
+  const result = await clack.confirm({
     message: prompt,
-    default: defaultYes,
+    initialValue: defaultYes,
   });
+
+  if (clack.isCancel(result)) {
+    return defaultYes;
+  }
+
+  return result;
 }
 
 export async function askPositiveInteger(prompt: string): Promise<number> {
   while (true) {
-    const answer = await askQuestion(`${prompt}: `);
-    const value = Number.parseInt(answer, 10);
+    const result = await clack.text({
+      message: `${prompt} (enter a number ≥ 1)`,
+      validate: (value) => {
+        const parsed = Number.parseInt((value ?? "").trim(), 10);
 
-    if (!Number.isNaN(value) && value >= 1) {
-      return value;
+        if (Number.isNaN(parsed) || parsed < 1) {
+          return "Enter a whole number ≥ 1.";
+        }
+
+        return undefined;
+      },
+    });
+
+    const value = unwrapClackResult(result).trim();
+    const parsed = Number.parseInt(value, 10);
+
+    if (!Number.isNaN(parsed) && parsed >= 1) {
+      return parsed;
     }
   }
 }

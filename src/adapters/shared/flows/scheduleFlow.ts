@@ -1,7 +1,10 @@
 import { createRedeemTask } from "../../../application/taskFactory.js";
 import type { TaskSource } from "../../../domain/task/redeemTask.js";
+import type { ScheduleSpec } from "../../../scheduling/scheduleSpec.js";
 import type { TaskScheduler } from "../../../scheduling/scheduler.js";
 import { formatScheduleInstant } from "../../../utils/utils.js";
+import type { GameIdValue } from "../../../config/constants.js";
+import { isPromptBack } from "../../ports/promptBack.js";
 import type { PromptPort } from "../../ports/promptPort.js";
 import { collectCredentials } from "../collectors/collectCredentials.js";
 import { collectGameSelection } from "../collectors/collectGame.js";
@@ -19,29 +22,55 @@ export async function scheduleFlow(options: ScheduleFlowOptions): Promise<void> 
 
   port.step("Schedule — configure a recurring or one-shot task.");
 
-  const schedule = await collectScheduleSpec(port);
-  const gameId = await collectGameSelection(port);
-  const credentials = await collectCredentials(port, gameId);
+  while (true) {
+    let schedule: ScheduleSpec;
 
-  const redeemTask = createRedeemTask({
-    gameId,
-    credentials,
-    scrapePolicy: { type: "ifNotScrapedToday" },
-    source,
-    metadata,
-  });
+    try {
+      schedule = await collectScheduleSpec(port);
+    } catch (error) {
+      if (isPromptBack(error)) {
+        port.gray("Schedule setup cancelled.");
+        return;
+      }
 
-  const scheduled = await scheduler.register({
-    redeemTask: {
-      gameId: redeemTask.gameId,
-      credentials: redeemTask.credentials,
-      scrapePolicy: redeemTask.scrapePolicy,
-      metadata: redeemTask.metadata,
-    },
-    schedule,
-  });
+      throw error;
+    }
 
-  port.success(`Scheduled task created: ${scheduled.id}`);
-  port.gray(`Next run: ${formatScheduleInstant(scheduled.nextRunAt)}`);
-  port.gray("Keep this process running — scheduled tasks fire while dev or start is active.");
+    let gameId: GameIdValue;
+
+    try {
+      gameId = await collectGameSelection(port, { allowBack: true });
+    } catch (error) {
+      if (isPromptBack(error)) {
+        continue;
+      }
+
+      throw error;
+    }
+
+    const credentials = await collectCredentials(port, gameId);
+
+    const redeemTask = createRedeemTask({
+      gameId,
+      credentials,
+      scrapePolicy: { type: "ifNotScrapedToday" },
+      source,
+      metadata,
+    });
+
+    const scheduled = await scheduler.register({
+      redeemTask: {
+        gameId: redeemTask.gameId,
+        credentials: redeemTask.credentials,
+        scrapePolicy: redeemTask.scrapePolicy,
+        metadata: redeemTask.metadata,
+      },
+      schedule,
+    });
+
+    port.success(`Scheduled task created: ${scheduled.id}`);
+    port.gray(`Next run: ${formatScheduleInstant(scheduled.nextRunAt)}`);
+    port.gray("Keep this process running — scheduled tasks fire while dev or start is active.");
+    return;
+  }
 }

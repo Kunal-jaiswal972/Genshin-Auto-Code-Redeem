@@ -1,5 +1,10 @@
 import { InlineKeyboard, type Api } from "grammy";
-import type { PromptChoice, PromptPort } from "../ports/promptPort.js";
+import type { PromptChoice, PromptOptions, PromptPort } from "../ports/promptPort.js";
+import {
+  PROMPT_BACK_LABEL,
+  PromptBackError,
+  TELEGRAM_BACK_CALLBACK,
+} from "../ports/promptBack.js";
 import {
   createAdapterLogger,
   type AdapterLogger,
@@ -31,15 +36,21 @@ export class TelegramPromptPort implements PromptPort {
   async choose<T extends string>(
     message: string,
     choices: readonly PromptChoice<T>[],
+    options?: PromptOptions,
   ): Promise<T> {
     if (choices.length === 0) {
       throw new Error("choose requires at least one option.");
     }
 
-    const valuePromise = this.waitForString("choose");
+    const allowBack = options?.allowBack === true;
+    const valuePromise = this.waitForString("choose", allowBack);
     this.adapterLog.debug(`Prompt choose: ${message} (${choices.length} options)`);
 
     const keyboard = new InlineKeyboard();
+
+    if (allowBack) {
+      keyboard.text(PROMPT_BACK_LABEL, TELEGRAM_BACK_CALLBACK).row();
+    }
 
     for (const choice of choices) {
       keyboard.text(choice.label, `${CHOOSE_PREFIX}${choice.value}`).row();
@@ -60,10 +71,19 @@ export class TelegramPromptPort implements PromptPort {
     return match.value;
   }
 
-  async question(message: string): Promise<string> {
-    const valuePromise = this.waitForString("question");
+  async question(message: string, options?: PromptOptions): Promise<string> {
+    const allowBack = options?.allowBack === true;
+    const valuePromise = this.waitForString("question", allowBack);
     this.adapterLog.debug(`Prompt question: ${message}`);
-    await this.api.sendMessage(this.chatId, message);
+
+    const replyMarkup = allowBack
+      ? new InlineKeyboard().text(PROMPT_BACK_LABEL, TELEGRAM_BACK_CALLBACK)
+      : undefined;
+
+    await this.api.sendMessage(this.chatId, message, {
+      reply_markup: replyMarkup,
+    });
+
     return valuePromise;
   }
 
@@ -151,7 +171,7 @@ export class TelegramPromptPort implements PromptPort {
     void this.api.sendMessage(this.chatId, `❌ ${text}`);
   }
 
-  private waitForString(kind: PendingPromptKind): Promise<string> {
+  private waitForString(kind: PendingPromptKind, allowBack = false): Promise<string> {
     if (this.session.pending) {
       this.session.pending.reject(new Error("Replaced by a new prompt."));
     }
@@ -159,6 +179,7 @@ export class TelegramPromptPort implements PromptPort {
     return new Promise<string>((resolve, reject) => {
       this.session.pending = {
         kind,
+        allowBack,
         resolve: (value) => {
           if (typeof value !== "string") {
             reject(new Error("Expected string response."));
@@ -205,7 +226,11 @@ export class TelegramPromptPort implements PromptPort {
 
 export function resolveTelegramCallbackData(
   data: string,
-): { kind: "choose"; value: string } | { kind: "yes" } | { kind: "no" } | null {
+): { kind: "choose"; value: string } | { kind: "yes" } | { kind: "no" } | { kind: "back" } | null {
+  if (data === TELEGRAM_BACK_CALLBACK) {
+    return { kind: "back" };
+  }
+
   if (data.startsWith(CHOOSE_PREFIX)) {
     return { kind: "choose", value: data.slice(CHOOSE_PREFIX.length) };
   }
@@ -219,4 +244,10 @@ export function resolveTelegramCallbackData(
   }
 
   return null;
+}
+
+export function rejectTelegramPromptBack(
+  pending: NonNullable<TelegramChatSession["pending"]>,
+): void {
+  pending.reject(new PromptBackError());
 }

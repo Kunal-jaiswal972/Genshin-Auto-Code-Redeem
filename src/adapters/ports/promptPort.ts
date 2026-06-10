@@ -3,12 +3,18 @@ export interface PromptChoice<T extends string = string> {
   readonly label: string;
 }
 
+export interface PromptOptions {
+  /** When true, the user can go back to the previous step (adapter-specific UI). */
+  readonly allowBack?: boolean;
+}
+
 export interface PromptPort {
   choose<T extends string>(
     message: string,
     choices: readonly PromptChoice<T>[],
+    options?: PromptOptions,
   ): Promise<T>;
-  question(message: string): Promise<string>;
+  question(message: string, options?: PromptOptions): Promise<string>;
   yesNo(message: string, defaultYes: boolean): Promise<boolean>;
   username(message?: string): Promise<string>;
   password(message?: string): Promise<string>;

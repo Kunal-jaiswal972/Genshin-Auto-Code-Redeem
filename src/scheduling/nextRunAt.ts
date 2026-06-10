@@ -1,4 +1,5 @@
 import type { ScheduleSpec } from "./scheduleSpec.js";
+import { parseTimeOfDay } from "./timeOfDay.js";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
@@ -6,23 +7,6 @@ export function formatWeekdayLabels(days: number[]): string {
   return days
     .map((day) => WEEKDAY_LABELS[day] ?? String(day))
     .join(", ");
-}
-
-function parseTimeOfDay(at: string): { hours: number; minutes: number } {
-  const match = /^(\d{1,2}):(\d{2})$/.exec(at.trim());
-
-  if (!match?.[1] || !match[2]) {
-    throw new Error(`Invalid time "${at}". Use HH:mm (24-hour).`);
-  }
-
-  const hours = Number.parseInt(match[1], 10);
-  const minutes = Number.parseInt(match[2], 10);
-
-  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-    throw new Error(`Invalid time "${at}". Use HH:mm (24-hour).`);
-  }
-
-  return { hours, minutes };
 }
 
 function atTimeOnDate(base: Date, at: string): Date {

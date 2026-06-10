@@ -8,7 +8,9 @@ import {
   createSchedulerTriggerHandler,
   runInteractiveApp,
 } from "../shared/interactiveApp.js";
+import { PROMPT_BACK_TEXT } from "../ports/promptBack.js";
 import {
+  rejectTelegramPromptBack,
   resolveTelegramCallbackData,
   TelegramPromptPort,
 } from "./telegramPromptPort.js";
@@ -156,6 +158,18 @@ export function createTelegramAdapter(
         return;
       }
 
+      if (parsed.kind === "back") {
+        if (pending.allowBack !== true) {
+          await ctx.answerCallbackQuery({ text: "Can't go back here." });
+          return;
+        }
+
+        await ctx.answerCallbackQuery();
+        logAdapter(TELEGRAM_ADAPTER_ID, "Resolved prompt back", { scope: chatId });
+        rejectTelegramPromptBack(pending);
+        return;
+      }
+
       if (pending.kind === "choose" && parsed.kind === "choose") {
         await ctx.answerCallbackQuery();
         logAdapter(TELEGRAM_ADAPTER_ID, `Resolved choose → ${parsed.value}`, {
@@ -211,6 +225,14 @@ export function createTelegramAdapter(
     const textKinds = new Set(["question", "username", "password"]);
 
     if (textKinds.has(pending.kind)) {
+      if (pending.allowBack === true && text.toLowerCase() === PROMPT_BACK_TEXT) {
+        logAdapter(TELEGRAM_ADAPTER_ID, `Resolved ${pending.kind} → back`, {
+          scope: chatId,
+        });
+        rejectTelegramPromptBack(pending);
+        return;
+      }
+
       logAdapter(TELEGRAM_ADAPTER_ID, `Resolved ${pending.kind} from text message`, {
         scope: chatId,
       });
