@@ -82,9 +82,9 @@
 
 ---
 
-## Phase 9 — Multi-user + unified SQLite storage ⏳ NOT STARTED
+## Phase 9 — Multi-user auth + unified SQLite storage ⏳ NOT STARTED
 
-> **Goal:** One deployment serves multiple Hoyoverse accounts. **All app data** (users, codes, scheduled tasks, run history) lives in SQLite — no `codes.json` or JSON task-store fallback. Each user gets an isolated Chrome profile and user–code redeem state.
+> **Goal:** One deployment serves multiple Hoyoverse accounts with **login / sign-up / guest** flows. **All app data** (users, codes, scheduled tasks, run history) lives in SQLite — no `codes.json` or JSON task-store fallback. Logged-in users get isolated data, stored credentials, and a dedicated Chrome profile (managed by the app, invisible to the user).
 
 ### Current limitation
 
@@ -92,74 +92,401 @@
 - Tasks/history already SQLite, but codes are a separate JSON layer
 - One `CHROME_USER_DATA_DIR` — switching accounts conflicts Hoyoverse session
 - `RedeemTask.credentials` has username/password but no stable **user id**
+- No session concept — everyone shares the same menu and data
 
-### Target model
+### Startup & session UX (CLI + Telegram + future adapters)
+
+On **every program start** (before main menu), show:
+
+1. **Log in** — pick an existing saved account
+2. **New account** — sign up (then logged in with full menu)
+3. **Continue as guest** — no account persisted
+
+| Mode | Main menu | Credentials | Tasks / history |
+|------|-----------|-------------|-----------------|
+| **Logged in** | Run now, Schedule, List, Cancel, History, **Account**, Exit | Auto from `users` row | Only this user's rows |
+| **Guest** | **Run now only** + Exit | Prompted every run (username, password, server) | None stored |
+
+**Logged-in user behavior**
+
+- Full menu: **Run now**, **Schedule**, list/cancel/history, **Account**, Exit
+- Run now and scheduled runs use stored credentials automatically — no re-prompt unless policy requires scrape choice (e.g. scrape yes/no on manual run)
+- Scheduled task list and run history are **filtered by `user_id`**
+- Scheduler triggers load that user's credentials, codes, and Chrome profile
+
+**Guest behavior**
+
+- **Run now** + **Exit** only — same run-now action as logged-in users, but no Schedule, List, Cancel, History, or Account
+- Must enter game, username, password, and server on every run (logged-in users skip this)
+- Nothing written to `users`, `scheduled_tasks`, or persistent run history tied to an account
+
+**Account menu** (logged-in users only — not shown to guests)
+
+- **Log out** — end session, return to startup screen (login / new account / guest)
+- **Delete account** — remove user row, all `user_id`-scoped codes/tasks/history, and **delete Chrome profile folder** from disk
+- **No edit** — to change game/credentials, user **deletes account** and creates a **new account** from the startup screen (top-level **New account**), not an in-place edit flow
+
+**New account** (startup option — pick from startup gate, not from main menu while already logged in; to add another account: log out → startup → New account)
+
+- Collect: `game_id`, `username`, `password`, `server`
+- Chrome profile path is **assigned automatically** (`<CHROME_USER_DATA_DIR>/<user_id>/` or sanitized slug) — **never shown or configurable by the user**
+- After sign-up, user is logged in and sees the full menu
+
+**Menu visibility rule**
+
+| | Run now | Schedule | List / Cancel / History | Account | Exit |
+|---|:---:|:---:|:---:|:---:|:---:|
+| **Logged in** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Guest** | ✅ | — | — | — | ✅ |
+
+Both modes can **run now**. Only logged-in users get **schedule** (create/list/cancel tasks), **run history**, and **account** actions.
+
+**No session persistence (all adapters)**
+
+- Auth state lives **in memory only** for the lifetime of the running process
+- **Exit** (main menu, `/stop`, process shutdown, adapter disconnect) **always ends the session** — no “remember me”, no saved login, no cookies/tokens on disk
+- Next launch (CLI `npm run dev`, Telegram `/start`, future REST/web) **always shows the startup screen** again: Log in / New account / Guest
+- **Log out** behaves the same as exit for session purposes (return to startup screen without quitting the process)
+- Do **not** persist `user_id` in SQLite sessions table, env files, Telegram chat metadata, or local storage between runs
+- Telegram: `/start` after exit requires login again; `/stop` clears in-memory session; no auto-resume of previous user on new `/start`
+
+### Users table (single source of truth per account)
 
 ```text
 DATABASE_URL=file:./src/data/redeemer.db   ← single SQLite file for everything
 
-users            (id, username, created_at)
-codes            (user_id, game_id, code, wiki_status, redeem_status, scraped_at, …)
-scheduled_tasks  (existing + user_id)
-run_history      (existing + user_id)
+users (
+  id              TEXT PRIMARY KEY,
+  game_id         TEXT NOT NULL,
+  username        TEXT NOT NULL,
+  password        TEXT NOT NULL,        -- encrypted at rest (see security)
+  server          TEXT NOT NULL,
+  chrome_profile  TEXT NOT NULL,        -- absolute or relative path; app-managed
+  created_at      TEXT NOT NULL,
+  UNIQUE (game_id, username, server)    -- or app-defined uniqueness rule
+)
 
-User (id, username)
-  ├── Chrome profile:  <CHROME_USER_DATA_DIR>/<username>/
-  ├── Codes:           SQLite rows keyed by (user_id, game_id, code)
-  └── Tasks/history:   SQLite rows include user_id
+codes            (user_id, game_id, code, wiki_status, redeem_status, scraped_at, …)
+scheduled_tasks  (id, user_id, game_id, credentials_json, schedule_json, …)
+run_history      (id, user_id, scheduled_task_id, game_id, …)
 ```
+
+No `sessions` table — login state is **not** stored in the DB between process runs.
 
 **User–code relation:** Each row in `codes` ties one user to one promo code for one game. Same code string can be `pending` for user A and `redeemed` for user B.
 
 **Remove:** `codes.json`, `CODE_STORE_BASE_PATH` for codes, JSON `CodeStore` file implementation, `DATABASE_URL=json:...` task-store fallback (SQLite only).
 
-### Planned changes
+### Schema strategy (testing — clean slate, no incremental migrations)
 
-#### Domain & storage
+> Current environment is **test-only** — no production data to preserve. Phase 9 uses a **wipe and recreate** approach instead of numbered SQL migration files.
 
-- [ ] Add `userId` on `RedeemTask`, `ScheduledTask`, `RunResult`
-- [ ] `users` table + repository (create, list, get by id/username)
-- [ ] `codes` table + `SqliteCodeStore` implementing existing `CodeStore` operations
-- [ ] Delete `src/storage/codeStore.ts` JSON read/write; remove `src/data/**/codes.json` from runtime path
-- [ ] Single `DATABASE_URL` — tasks, history, users, codes in one DB
-- [ ] Optional encrypted credential vault per user (future within same phase)
+**Do this once when starting Phase 9 schema work**
 
-#### Migrations (rough idea)
+- [ ] Delete SQLite DB file (e.g. `src/data/redeemer.db` or path from `DATABASE_URL`)
+- [ ] Delete JSON code files under `src/data/**/codes.json` (if any)
+- [ ] Delete test Chrome profile folders under `CHROME_USER_DATA_DIR` (optional but recommended)
 
-- [ ] `schema_migrations` table: `(version INTEGER PRIMARY KEY, name TEXT, applied_at TEXT)`
-- [ ] Numbered migration files: `src/infrastructure/storage/sqlite/migrations/001_baseline.sql`, `002_users_and_codes.sql`, …
-- [ ] `runMigrations(db)` on startup (after `initPersistence`) — apply pending versions in order, record in `schema_migrations`
-- [ ] One-time **data migration** script/step: import existing `codes.json` (+ per-game files) into `codes` table under a `default` user row, then stop reading JSON
-- [ ] Dev rule: never edit applied migrations; add a new file for schema changes
+**Implementation approach**
 
-#### Chrome profiles
+- [ ] Replace `migrations.ts` with a **single full schema** — all tables defined together: `users`, `codes`, `scheduled_tasks` (with `user_id`), `run_history` (with `user_id`), indexes
+- [ ] Keep `migrateSqliteDatabase(db)` as `CREATE TABLE IF NOT EXISTS` + indexes on startup (idempotent for empty DB)
+- [ ] **No** `schema_migrations` table, **no** `001_*.sql` / `002_*.sql` files, **no** import from old `codes.json` or backfill of old task rows
+- [ ] Document reset in README: stop app → delete DB (+ codes JSON + chrome folders) → start app → fresh schema
 
-- [ ] Resolve profile: `path.join(CHROME_USER_DATA_DIR, sanitizeUsername(username))`
-- [ ] Pass resolved profile per task into `chromeLauncher` (not global config only)
-- [ ] Document: e.g. `%LOCALAPPDATA%/Google/Chrome/DebugProfile/<username>`
+**Later (post-Phase 9, when data matters):** introduce numbered migrations and `schema_migrations` before any shared/production deploy. Not in scope for this phase.
 
-#### Adapters & UX
+### Security principles (apply in every subtask below)
 
-- [ ] CLI / Telegram: select or create user before run/schedule
-- [ ] List users; optional switch without restart
-- [ ] Telegram: map `chatId` + chosen user
+- Passwords encrypted at rest (`CREDENTIALS_ENCRYPTION_KEY`); never log passwords
+- Parameterized SQL + Zod validation on all inputs
+- Session in-memory only — never persisted to DB/disk between process runs
+- Chrome profile paths app-assigned only; sanitized; deleted with account
+- Guest least-privilege — no access to other users' data
 
-#### Scheduler & history
+---
 
-- [ ] Scheduled tasks + run history include `user_id`
-- [ ] Trigger loads correct user's codes + Chrome profile
+### Sequential subtasks
 
-#### Config & deploy
+> Work **in order**. Mark a step ✅ only after its **Verify** checks pass. Do not skip ahead — later steps depend on earlier ones.
 
-- [ ] `.env.example` — drop `CODE_STORE_BASE_PATH`; document single `DATABASE_URL` + Chrome base dir
-- [ ] Docker: mount one `/data/redeemer.db` (+ `/data/chrome/<username>/` for profiles)
+| Step | Summary | Status |
+|------|---------|--------|
+| [9.1](#step-91--schema-foundation-clean-slate) | Full schema + `users` table (wipe DB first) | ⏳ |
+| [9.2](#step-92--session-model-in-memory-only) | `SessionContext` (no persistence) | ⏳ |
+| [9.3](#step-93--sign-up--chrome-profile) | New account + auto Chrome folder | ⏳ |
+| [9.4](#step-94--startup-gate--login-cli) | Startup screen + login (CLI) | ⏳ |
+| [9.5](#step-95--guest-mode-cli) | Guest menu (Run now only) | ⏳ |
+| [9.6](#step-96--logged-in-run-now) | Run now with stored credentials | ⏳ |
+| [9.7](#step-97--user-scoped-tasks--history) | `user_id` on tasks + history | ⏳ |
+| [9.8](#step-98--sqlite-codes-per-user) | Codes in SQLite; remove JSON store | ⏳ |
+| [9.9](#step-99--scheduler-per-user) | Scheduler + Chrome per user | ⏳ |
+| [9.10](#step-910--account-menu) | Log out + delete account | ⏳ |
+| [9.11](#step-911--telegram-parity) | Same auth flows on Telegram | ⏳ |
+| [9.12](#step-912--cleanup--docs) | Remove legacy paths; docs + E2E | ⏳ |
 
-### Acceptance criteria
+---
 
-- [ ] No JSON code files read or written at runtime
-- [ ] Two users redeem same game without sharing redeem status
-- [ ] Each user has separate Chrome profile and Hoyoverse session
-- [ ] Schema changes ship via numbered migrations, not manual DB edits
+#### Step 9.1 — Schema foundation (clean slate)
+
+**Goal:** Wipe test data; define full Phase 9 schema in one place; `users` table + credential crypto.
+
+**Build**
+
+- [ ] **Reset:** delete existing DB file, `codes.json` files, and test Chrome profiles (manual or `npm run db:reset` script)
+- [ ] Rewrite `src/infrastructure/storage/sqlite/migrations.ts` — single schema block with `users`, `scheduled_tasks` (+ `user_id`), `run_history` (+ `user_id`), `codes`, indexes (no separate migration versions)
+- [ ] `UserRepository` — create, getById, listForLogin, delete
+- [ ] `credentialCrypto.ts` — encrypt/decrypt password at rest; validate `CREDENTIALS_ENCRYPTION_KEY` at startup
+- [ ] Zod schemas for user create/login payloads
+
+**Verify**
+
+- [ ] `npm run typecheck` passes
+- [ ] Delete DB → start app → tables created; second start is idempotent (`CREATE IF NOT EXISTS`)
+- [ ] Create user via repository; password in DB is not plain text
+- [ ] List users returns labels without exposing password
+- [ ] Old scheduled tasks / history / codes are **gone** after reset (expected)
+
+**Status:** ⏳ NOT STARTED
+
+---
+
+#### Step 9.2 — Session model (in-memory only)
+
+**Goal:** Single `SessionContext` used by all adapters; cleared on exit — no disk persistence.
+
+**Build**
+
+- [ ] `SessionContext` type: `{ kind: "guest" }` | `{ kind: "user"; userId: string }`
+- [ ] `SessionManager` (or equivalent) — set/get/clear; **no** SQLite/file writes
+- [ ] Wire clear on CLI Exit, log out hook, process `SIGINT`/`beforeExit`
+- [ ] Document: restarting app always requires login/guest again
+
+**Verify**
+
+- [ ] Unit test: set user → clear → `get()` is null/empty
+- [ ] No session files created under `src/data` or temp dirs during run
+- [ ] After Exit and re-entering CLI, startup gate shows again (manual smoke once 9.4 exists)
+
+**Status:** ⏳ NOT STARTED
+
+---
+
+#### Step 9.3 — Sign-up + Chrome profile
+
+**Goal:** New account flow creates DB row + Chrome profile directory automatically.
+
+**Build**
+
+- [ ] `createChromeProfileForUser(userId)` → `path.join(CHROME_USER_DATA_DIR, userId)`; `fs.mkdir` on sign-up
+- [ ] Shared `signUpFlow(port)` — game, username, password, server (reuse collectors)
+- [ ] Store `chrome_profile` on user row; never prompt user for path
+- [ ] On success: set `SessionContext` to logged-in user
+
+**Verify**
+
+- [ ] Sign up → folder exists on disk
+- [ ] `users.chrome_profile` matches created path
+- [ ] Duplicate (game, username, server) rejected with clear error
+- [ ] User lands on full main menu after sign-up
+
+**Status:** ⏳ NOT STARTED
+
+---
+
+#### Step 9.4 — Startup gate + login (CLI)
+
+**Goal:** Every CLI start shows Login | New account | Guest before main menu.
+
+**Build**
+
+- [ ] `startupGateFlow(port)` — three choices; New account → `signUpFlow`; Login → user picker (game · username · server)
+- [ ] Login sets `SessionContext`; no password re-entry at login (account is the identity)
+- [ ] Integrate in `cliApp.ts` before `runInteractiveApp`
+- [ ] Exit from main menu → process ends → next `npm run dev` shows startup gate again
+
+**Verify**
+
+- [ ] Cold start always shows startup gate
+- [ ] Login as user A → main menu; Exit → restart → startup gate (not auto-logged-in)
+- [ ] Two saved users: picker shows both; selecting one loads correct session
+
+**Status:** ⏳ NOT STARTED
+
+---
+
+#### Step 9.5 — Guest mode (CLI)
+
+**Goal:** Guest sees **Run now + Exit** only; credentials prompted every run.
+
+**Build**
+
+- [ ] `runInteractiveApp` accepts `SessionContext`
+- [ ] Guest menu: **Run now** + Exit only — hide Schedule, List, Cancel, History, Account (logged-in keeps Run now + all schedule options)
+- [ ] Guest run now: always collect game + credentials (existing collectors)
+- [ ] Guest runs do not write `user_id` on tasks/history (or skip persistent history — define in 9.7)
+
+**Verify**
+
+- [ ] Guest cannot reach schedule/list/history menus
+- [ ] Each guest run prompts credentials
+- [ ] Guest Exit → restart → startup gate
+
+**Status:** ⏳ NOT STARTED
+
+---
+
+#### Step 9.6 — Logged-in run now
+
+**Goal:** Logged-in user runs without re-entering username/password/server.
+
+**Build**
+
+- [ ] `runNowFlow` reads credentials from `UserRepository` when `SessionContext.kind === "user"`
+- [ ] Pass user's `chrome_profile` into workflow (stub OK until 9.9 fully wires launcher)
+- [ ] Keep scrape yes/no prompt for manual runs
+
+**Verify**
+
+- [ ] Logged-in run now does not ask for username/password/server
+- [ ] Wrong stored credentials still fail redeem gracefully (logged error, no crash)
+- [ ] `npm run typecheck` passes
+
+**Status:** ⏳ NOT STARTED
+
+---
+
+#### Step 9.7 — User-scoped tasks + history
+
+**Goal:** Scheduled tasks and run history filtered by `user_id`.
+
+**Build**
+
+- [ ] `scheduled_tasks` / `run_history` include `user_id` NOT NULL (already in schema from 9.1 — no ALTER migration)
+- [ ] `TaskStore` / `RunHistoryStore` — `listByUserId`, `record` includes `user_id`
+- [ ] `scheduleFlow` attaches `user_id` from session
+- [ ] List/cancel/history UI uses filtered queries only
+- [ ] Display cards unchanged but data scoped
+
+**Verify**
+
+- [ ] User A schedules task; User B list is empty
+- [ ] User A history does not show User B runs
+- [ ] Guest runs do not appear in any user's history (or are omitted from DB)
+
+**Status:** ⏳ NOT STARTED
+
+---
+
+#### Step 9.8 — SQLite codes per user
+
+**Goal:** Replace JSON `codes.json` with per-user SQLite rows.
+
+**Build**
+
+- [ ] `codes` table keyed by `(user_id, game_id, code)` (already in schema from 9.1)
+- [ ] `SqliteCodeStore` implements scrape/merge/redeem lookups scoped by `user_id`
+- [ ] `redeemWorkflow` + `scrapePolicy` pass `userId` from session/task
+- [ ] Remove JSON `codeStore` runtime path; drop `CODE_STORE_BASE_PATH` for codes
+- [ ] **No** import of old `codes.json` — test data discarded with DB wipe
+
+**Verify**
+
+- [ ] User A redeems code X; User B still has X pending
+- [ ] `hasScrapedToday` scoped per user
+- [ ] No read/write of `src/data/**/codes.json` during run
+- [ ] `npm run typecheck` + manual scrape + redeem smoke
+
+**Status:** ⏳ NOT STARTED
+
+---
+
+#### Step 9.9 — Scheduler per user
+
+**Goal:** Scheduled fires use correct credentials, codes, and Chrome profile.
+
+**Build**
+
+- [ ] `SchedulerRunner` trigger loads user by `scheduled_tasks.user_id`
+- [ ] `chromeLauncher` uses `users.chrome_profile` per run (not global `CHROME_USER_DATA_DIR` only)
+- [ ] Scheduled tasks register with `scrapePolicy: ifNotScrapedToday` per user
+- [ ] Telegram notify (if used) still works per chat metadata
+
+**Verify**
+
+- [ ] Two users, two schedules — each fires with own credentials (log/profile path)
+- [ ] Same code different redeem state per user after scheduled run
+- [ ] Next-run display still correct per task
+
+**Status:** ⏳ NOT STARTED
+
+---
+
+#### Step 9.10 — Account menu
+
+**Goal:** Log out + delete account (no edit).
+
+**Build**
+
+- [ ] Main menu **Account** (logged-in only): Log out | Delete account
+- [ ] **Log out** → clear session → return to startup gate (process keeps running)
+- [ ] **Delete account** → confirm → delete user row + cascade codes/tasks/history + `fs.rm(chrome_profile)`
+- [ ] No edit option; README/plan note: change account = delete + new account
+
+**Verify**
+
+- [ ] Log out → startup gate; log in again works
+- [ ] Delete → user gone from login picker; Chrome folder removed
+- [ ] Deleted user's tasks/history/codes not visible to anyone
+
+**Status:** ⏳ NOT STARTED
+
+---
+
+#### Step 9.11 — Telegram parity
+
+**Goal:** Same startup gate, session rules, and menus on Telegram.
+
+**Build**
+
+- [ ] `/start` → startup gate (Login | New account | Guest)
+- [ ] In-memory `chatId` → `SessionContext` (cleared on `/stop`, log out, exit)
+- [ ] Guest: run now only; logged-in: full menu + account
+- [ ] `/stop` and bot shutdown clear session; next `/start` requires login again
+- [ ] No `user_id` stored in Telegram message metadata for auto-login
+
+**Verify**
+
+- [ ] Telegram guest cannot schedule
+- [ ] `/stop` then `/start` → startup gate (not auto-logged-in)
+- [ ] Two users on same chat: login picker works
+- [ ] Display cards render correctly in Telegram HTML
+
+**Status:** ⏳ NOT STARTED
+
+---
+
+#### Step 9.12 — Cleanup + docs
+
+**Goal:** Remove legacy paths; document env; full acceptance pass.
+
+**Build**
+
+- [ ] Remove `DATABASE_URL=json:...` task-store fallback (SQLite only)
+- [ ] Update `.env.example` — `DATABASE_URL`, `CHROME_USER_DATA_DIR`, `CREDENTIALS_ENCRYPTION_KEY`
+- [ ] Update `README.md` — auth flows, guest vs logged-in, no session persistence, key backup, **how to reset DB** (delete file / `db:reset`)
+- [ ] Phase 10 Docker note: single DB volume + `/data/chrome/<user_id>/`
+- [ ] Changelog entry
+
+**Verify (full Phase 9 acceptance)**
+
+- [ ] All steps 9.1–9.11 ✅
+- [ ] `npm run build` + `npm run typecheck`
+- [ ] CLI E2E: sign up → schedule → list → history → log out → guest run → exit → re-login
+- [ ] Telegram E2E: same happy path
+- [ ] Two users same game: isolated codes, tasks, history, Chrome profiles
+
+**Status:** ⏳ NOT STARTED
 
 ---
 
@@ -223,4 +550,8 @@ User (id, username)
 | 2026-06-09 | 7-step6 | Telegram adapter + Docker deploy files                |
 | 2026-06-09 | 7-step7 | Legacy purge; `dev`/`start` scripts; root README      |
 | 2026-06-09 | 9-plan  | Phase 9: multi-user, unified SQLite (no codes.json), migrations sketch |
+| 2026-06-09 | 9-plan  | Phase 9: login/guest flows, users table, account menu, auth practices |
+| 2026-06-09 | 9-plan  | Phase 9: no session persistence — re-login after exit (all adapters) |
+| 2026-06-09 | 9-plan  | Phase 9: sequential subtasks 9.1–9.12 with per-step verify checklist |
+| 2026-06-09 | 9-plan  | Phase 9: clean-slate schema (no incremental SQL migrations; wipe test DB) |
 
