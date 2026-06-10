@@ -1,4 +1,6 @@
 import { InlineKeyboard, type Api } from "grammy";
+import type { DisplayCard } from "../shared/display/displayCard.js";
+import { formatDisplayCardTelegramHtml } from "../shared/display/displayCard.js";
 import type { PromptChoice, PromptOptions, PromptPort } from "../ports/promptPort.js";
 import {
   PROMPT_BACK_LABEL,
@@ -169,6 +171,14 @@ export class TelegramPromptPort implements PromptPort {
     const detail = error?.message ?? "";
     const text = detail.length > 0 ? `${message} ${detail}` : message;
     void this.api.sendMessage(this.chatId, `❌ ${text}`);
+  }
+
+  displayCards(cards: readonly DisplayCard[]): void {
+    for (const card of cards) {
+      void this.api.sendMessage(this.chatId, formatDisplayCardTelegramHtml(card), {
+        parse_mode: "HTML",
+      });
+    }
   }
 
   private waitForString(kind: PendingPromptKind, allowBack = false): Promise<string> {

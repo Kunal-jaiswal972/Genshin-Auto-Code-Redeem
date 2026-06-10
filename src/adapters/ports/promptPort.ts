@@ -3,6 +3,8 @@ export interface PromptChoice<T extends string = string> {
   readonly label: string;
 }
 
+import type { DisplayCard } from "../shared/display/displayCard.js";
+
 export interface PromptOptions {
   /** When true, the user can go back to the previous step (adapter-specific UI). */
   readonly allowBack?: boolean;
@@ -25,4 +27,5 @@ export interface PromptPort {
   warn(message: string): void;
   gray(message: string): void;
   error(message: string, error?: Error): void;
+  displayCards(cards: readonly DisplayCard[]): void;
 }

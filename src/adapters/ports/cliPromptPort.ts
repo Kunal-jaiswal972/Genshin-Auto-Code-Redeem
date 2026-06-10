@@ -1,4 +1,7 @@
+import * as clack from "@clack/prompts";
 import { logger } from "../../utils/utils.js";
+import type { DisplayCard } from "../shared/display/displayCard.js";
+import { formatDisplayCardCliBody } from "../shared/display/displayCard.js";
 import type { PromptPort } from "./promptPort.js";
 import {
   askChoice,
@@ -23,5 +26,10 @@ export function createCliPromptPort(): PromptPort {
     warn: (message) => logger.warn(message),
     gray: (message) => logger.gray(message),
     error: (message, error) => logger.error(message, error),
+    displayCards: (cards: readonly DisplayCard[]) => {
+      for (const card of cards) {
+        clack.note(formatDisplayCardCliBody(card), card.title);
+      }
+    },
   };
 }

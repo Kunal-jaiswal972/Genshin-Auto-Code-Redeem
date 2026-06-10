@@ -1,9 +1,15 @@
 import { runTask } from "../../application/taskRunner.js";
 import type { TaskSource } from "../../domain/task/redeemTask.js";
+import type { ScheduledTask } from "../../domain/task/scheduledTask.js";
 import { getRunHistoryStore } from "../../infrastructure/storage/persistence.js";
 import type { TaskScheduler } from "../../scheduling/scheduler.js";
 import type { PromptPort } from "../ports/promptPort.js";
-import { displayRunResult, formatRunHistoryLine, formatScheduledTaskLine } from "./utils.js";
+import {
+  displayRunHistoryList,
+  displayScheduledTaskList,
+} from "./display/listDisplay.js";
+import { formatScheduledTaskChoiceLabel } from "./display/scheduledTaskDisplay.js";
+import { displayRunResult } from "./utils.js";
 import { runNowFlow } from "./flows/runNowFlow.js";
 import { scheduleFlow } from "./flows/scheduleFlow.js";
 
@@ -31,6 +37,12 @@ const MAIN_MENU_CHOICES = [
   { value: "history" as const, label: "View recent run history" },
   { value: "exit" as const, label: "Exit" },
 ];
+
+function buildScheduledTasksById(
+  tasks: readonly ScheduledTask[],
+): Map<string, ScheduledTask> {
+  return new Map(tasks.map((task) => [task.id, task]));
+}
 
 export async function runInteractiveApp(
   options: InteractiveAppOptions,
@@ -75,17 +87,10 @@ export async function runInteractiveApp(
       }
 
       const entries = await runHistoryStore.listRecent(10);
+      const tasks = await scheduler.list();
+      const tasksById = buildScheduledTasksById(tasks);
 
-      if (entries.length === 0) {
-        port.info("No run history yet.");
-        continue;
-      }
-
-      port.info(`Recent runs (${entries.length}):`);
-      for (const entry of entries) {
-        port.gray(`  ${formatRunHistoryLine(entry)}`);
-      }
-
+      displayRunHistoryList(port, entries, tasksById);
       continue;
     }
 
@@ -99,7 +104,7 @@ export async function runInteractiveApp(
     if (action === "cancel") {
       const choices = tasks.map((task) => ({
         value: task.id,
-        label: formatScheduledTaskLine(task),
+        label: formatScheduledTaskChoiceLabel(task),
       }));
       const taskId = await port.choose("Cancel which task?", choices);
       await scheduler.cancel(taskId);
@@ -107,10 +112,7 @@ export async function runInteractiveApp(
       continue;
     }
 
-    port.info(`Scheduled tasks (${tasks.length}):`);
-    for (const task of tasks) {
-      port.gray(`  ${formatScheduledTaskLine(task)}`);
-    }
+    displayScheduledTaskList(port, tasks);
   }
 }
 
