@@ -535,24 +535,45 @@ No `sessions` table — login state is **not** stored in the DB between process 
 | Telegram bot                      | ✅ Complete |
 | REST API                          | 🔮 Future  |
 | Discord bot                       | 🔮 Future  |
-| Web dashboard                     | 🔮 Future  |
 
 
 ---
 
 ## Future TODO
 
+### Multi-capability platform (major)
+
+> **Goal:** Support multiple unrelated automations (e.g. code redeemer, FB friend requests, IG reel downloader) behind the **same input adapters** (CLI, Telegram, future Discord/HTTP). Today adapters only drive redeem via `mainMenu` → `RedeemTask` → `runRedeemTask`. Add a **capability layer** so new bots plug in without forking menus or overloading `RedeemTask.metadata`.
+
+**Current limitation:** input adapters are reusable; domain/application are redeem-only. `RedeemTask`, scheduler, run history, and `mainMenu` are hardcoded to scrape/redeem.
+
+**Target:**
+
+```text
+CLI / Telegram / Discord / HTTP  →  Capability router menu  →  capabilityModules registry
+                                        │
+                        ┌───────────────┼───────────────┐
+                        ▼               ▼               ▼
+                  CodeRedeemer    FbFriendBot    IgReelDownloader
+```
+
+- Input adapters stay thin (`PromptPort`, session, call router).
+- Capabilities own prompts, validation, execution, optional scheduling, and their own job/result types (`AppJob` union).
+- Redeem becomes the first registered capability (`codeRedeemCapability`).
+- Start after Phase 9 (per-user scoping) when possible.
+
+- [ ] `CapabilityModule` interface + `capabilityModules.ts` registry (mirror `adapterModules.ts`)
+- [ ] `AppJob` / result types — `RedeemTask` as one variant
+- [ ] Capability router menu (replace or wrap redeem-only `mainMenu`)
+- [ ] Migrate code redeem into `codeRedeemCapability`
+- [ ] Scheduler + run history dispatch by job/capability type
+- [ ] Wire CLI + Telegram through router (no redeem logic in adapters)
+- [ ] Docs: how to add a capability; optional second-capability spike
+
 ### Email reporting
 
 - [ ] `src/infrastructure/reporting/emailReporter.ts`
 - [ ] Subscribe to `WorkflowEvent` on event bus (post-run hook)
-
-### REST API (sketch)
-
-- [ ] `POST /api/v1/tasks/run` → `runTask`
-- [ ] `POST /api/v1/tasks/schedule` → scheduler register
-- [ ] `GET /api/v1/tasks/scheduled`, `DELETE /api/v1/tasks/:id`
-- [ ] `GET /api/v1/tasks/:id/runs` → run history
 
 ---
 
@@ -576,4 +597,5 @@ No `sessions` table — login state is **not** stored in the DB between process 
 | 2026-06-09 | 9-plan  | Phase 9: no session persistence — re-login after exit (all adapters) |
 | 2026-06-09 | 9-plan  | Phase 9: sequential subtasks 9.1–9.12 with per-step verify checklist |
 | 2026-06-09 | 9-plan  | Phase 9: clean-slate schema (no incremental SQL migrations; wipe test DB) |
+| 2026-06-08 | future  | Future TODO: multi-capability platform (capability registry + router) |
 
