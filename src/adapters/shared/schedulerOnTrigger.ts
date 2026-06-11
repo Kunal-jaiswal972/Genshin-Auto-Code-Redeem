@@ -4,14 +4,14 @@ import type { ScheduledRunNotifier } from "../contracts/scheduledRunNotifier.js"
 import { createScheduledRunHandler } from "./scheduledRunHandler.js";
 
 export interface CreateSchedulerOnTriggerOptions {
-  readonly fallbackPort: PromptPort;
+  readonly terminalPrompt: PromptPort;
   readonly getScheduledRunNotifiers: () => readonly ScheduledRunNotifier[];
 }
 
 export function createSchedulerOnTrigger(
   options: CreateSchedulerOnTriggerOptions,
 ): SchedulerTriggerHandler {
-  const { fallbackPort, getScheduledRunNotifiers } = options;
+  const { terminalPrompt, getScheduledRunNotifiers } = options;
 
   return async (task) => {
     for (const notifier of getScheduledRunNotifiers()) {
@@ -21,7 +21,7 @@ export function createSchedulerOnTrigger(
       }
     }
 
-    const handler = createScheduledRunHandler(fallbackPort);
+    const handler = createScheduledRunHandler(terminalPrompt);
     await handler(task);
   };
 }

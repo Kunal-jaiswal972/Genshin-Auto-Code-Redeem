@@ -3,26 +3,25 @@ import { getAppConfig } from "../../config/appConfig.js";
 import { createScheduler } from "../../scheduling/createScheduler.js";
 import { logger } from "../../utils/utils.js";
 import type { ScheduledRunNotifier } from "../contracts/scheduledRunNotifier.js";
-import { createCliAdapterPorts } from "../cli/core/cliPorts.js";
+import { createTerminalPorts } from "../shared/terminalPorts.js";
 import { createSchedulerOnTrigger } from "../shared/schedulerOnTrigger.js";
 import { createEnabledAdapters } from "./createEnabledAdapters.js";
 
 export async function runApplication(): Promise<void> {
   const appConfig = getAppConfig();
-  const { prompt: logPort, display: logDisplay } = createCliAdapterPorts();
+  const terminal = createTerminalPorts();
   let scheduledRunNotifiers: readonly ScheduledRunNotifier[] = [];
 
   const scheduler = createScheduler({
     onTrigger: createSchedulerOnTrigger({
-      fallbackPort: logPort,
+      terminalPrompt: terminal.prompt,
       getScheduledRunNotifiers: () => scheduledRunNotifiers,
     }),
   });
 
   const enabled = createEnabledAdapters({
     scheduler,
-    logPort,
-    logDisplay,
+    terminal,
     appConfig,
   });
 

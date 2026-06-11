@@ -13,8 +13,8 @@ export const cliAdapterModule: AdapterModule = {
   create(options) {
     return {
       adapter: createCliAdapter({
-        prompt: options.logPort,
-        display: options.logDisplay,
+        prompt: options.terminal.prompt,
+        display: options.terminal.display,
         scheduler: options.scheduler,
         source: "cli",
       }),

@@ -57,8 +57,7 @@ src/
 ├── adapters/cli/
 │   ├── core/
 │   │   ├── cliAdapterModule.ts   CLI adapter registration
-│   │   ├── cliAdapter.ts         TaskInputAdapter implementation
-│   │   └── cliPorts.ts           PromptPort + DisplayPresenter for terminal
+│   │   └── cliAdapter.ts         TaskInputAdapter implementation
 │   └── lib/
 │       └── prompts.ts            Clack-backed prompt helpers
 ├── adapters/telegram/
@@ -71,9 +70,10 @@ src/
 │       └── telegramScheduledRunNotifier.ts
 ├── adapters/contracts/        PromptPort, DisplayPresenter, TaskInputAdapter, ScheduledRunNotifier
 ├── adapters/shared/
+│   ├── terminalPorts.ts       Shared terminal PromptPort + DisplayPresenter
 │   ├── mainMenu.ts            Main menu loop (run / schedule / list / cancel / history)
 │   ├── scheduledRunHandler.ts Scheduler fallback: run task + display result
-│   ├── schedulerOnTrigger.ts  Route scheduled runs → Telegram notify or CLI display
+│   ├── schedulerOnTrigger.ts  Route scheduled runs → Telegram notify or terminal display
 │   ├── displayRunResult.ts    Format + print a RunResult via PromptPort
 │   ├── flows/                 runNowMenuFlow, scheduleMenuFlow
 │   ├── prompts/               promptGameSelection, promptCredentials, promptSchedule, …

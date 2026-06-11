@@ -1,8 +1,8 @@
 import * as clack from "@clack/prompts";
-import { logger } from "../../../utils/utils.js";
-import type { DisplayPresenter } from "../../contracts/displayPresenter.js";
-import type { PromptPort } from "../../contracts/promptPort.js";
-import { formatDisplayCardCliBody } from "../../shared/formatters/formatDisplayCard.js";
+import { logger } from "../../utils/utils.js";
+import type { DisplayPresenter } from "../contracts/displayPresenter.js";
+import type { PromptPort } from "../contracts/promptPort.js";
+import { formatDisplayCardCliBody } from "./formatters/formatDisplayCard.js";
 import {
   askChoice,
   askPassword,
@@ -10,14 +10,15 @@ import {
   askQuestion,
   askUsername,
   askYesNo,
-} from "../lib/prompts.js";
+} from "../cli/lib/prompts.js";
 
-export interface CliAdapterPorts {
+/** Shared terminal I/O — scheduler fallback and optional CLI menu adapter. */
+export interface TerminalPorts {
   readonly prompt: PromptPort;
   readonly display: DisplayPresenter;
 }
 
-export function createCliAdapterPorts(): CliAdapterPorts {
+export function createTerminalPorts(): TerminalPorts {
   const display: DisplayPresenter = {
     displayCards: (cards) => {
       for (const card of cards) {

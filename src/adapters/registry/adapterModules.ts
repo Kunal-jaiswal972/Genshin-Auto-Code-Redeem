@@ -1,9 +1,8 @@
 import type { AppConfig } from "../../types/appConfig.js";
 import type { TaskScheduler } from "../../scheduling/scheduler.js";
-import type { DisplayPresenter } from "../contracts/displayPresenter.js";
-import type { PromptPort } from "../contracts/promptPort.js";
 import type { ScheduledRunNotifier } from "../contracts/scheduledRunNotifier.js";
 import type { TaskInputAdapter } from "../contracts/taskInputAdapter.js";
+import type { TerminalPorts } from "../shared/terminalPorts.js";
 import { cliAdapterModule } from "../cli/core/cliAdapterModule.js";
 import { telegramAdapterModule } from "../telegram/core/telegramAdapterModule.js";
 
@@ -11,8 +10,7 @@ export type AdapterLifecycle = "background" | "foreground";
 
 export interface AdapterModuleCreateOptions {
   readonly scheduler: TaskScheduler;
-  readonly logPort: PromptPort;
-  readonly logDisplay: DisplayPresenter;
+  readonly terminal: TerminalPorts;
   readonly appConfig: AppConfig;
 }
 
