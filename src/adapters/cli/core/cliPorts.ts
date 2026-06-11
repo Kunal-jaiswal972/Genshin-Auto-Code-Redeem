@@ -1,8 +1,8 @@
 import * as clack from "@clack/prompts";
-import { logger } from "../../utils/utils.js";
-import type { DisplayPresenter } from "../contracts/displayPresenter.js";
-import type { PromptPort } from "../contracts/promptPort.js";
-import { formatDisplayCardCliBody } from "../shared/formatters/formatDisplayCard.js";
+import { logger } from "../../../utils/utils.js";
+import type { DisplayPresenter } from "../../contracts/displayPresenter.js";
+import type { PromptPort } from "../../contracts/promptPort.js";
+import { formatDisplayCardCliBody } from "../../shared/formatters/formatDisplayCard.js";
 import {
   askChoice,
   askPassword,
@@ -10,7 +10,7 @@ import {
   askQuestion,
   askUsername,
   askYesNo,
-} from "./prompts.js";
+} from "../lib/prompts.js";
 
 export interface CliAdapterPorts {
   readonly prompt: PromptPort;

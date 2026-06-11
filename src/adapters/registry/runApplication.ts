@@ -3,7 +3,7 @@ import { getAppConfig } from "../../config/appConfig.js";
 import { createScheduler } from "../../scheduling/createScheduler.js";
 import { logger } from "../../utils/utils.js";
 import type { ScheduledRunNotifier } from "../contracts/scheduledRunNotifier.js";
-import { createCliAdapterPorts } from "../cli/createCliPorts.js";
+import { createCliAdapterPorts } from "../cli/core/cliPorts.js";
 import { createSchedulerOnTrigger } from "../shared/schedulerOnTrigger.js";
 import { createEnabledAdapters } from "./createEnabledAdapters.js";
 

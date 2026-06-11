@@ -1,6 +1,6 @@
 import type { AdapterModule } from "./adapterModule.js";
-import { cliAdapterModule } from "../cli/cliAdapterModule.js";
-import { telegramAdapterModule } from "../telegram/telegramAdapterModule.js";
+import { cliAdapterModule } from "../cli/core/cliAdapterModule.js";
+import { telegramAdapterModule } from "../telegram/core/telegramAdapterModule.js";
 
 /**
  * Central adapter registry. To add an adapter (e.g. Discord, HTTP API):

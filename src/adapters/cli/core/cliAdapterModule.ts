@@ -1,5 +1,5 @@
-import type { AdapterModule } from "../registry/adapterModule.js";
-import { createCliAdapter } from "./createCliAdapter.js";
+import type { AdapterModule } from "../../registry/adapterModule.js";
+import { createCliAdapter } from "./cliAdapter.js";
 
 export const cliAdapterModule: AdapterModule = {
   id: "cli",

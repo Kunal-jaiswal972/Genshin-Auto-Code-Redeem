@@ -1,19 +1,19 @@
 import { Bot, type Context } from "grammy";
-import type { TaskScheduler } from "../../scheduling/scheduler.js";
-import { logger } from "../../utils/utils.js";
-import type { TaskInputAdapter } from "../contracts/taskInputAdapter.js";
-import { runMainMenu } from "../shared/mainMenu.js";
-import { PROMPT_BACK_TEXT } from "../contracts/promptBack.js";
+import type { TaskScheduler } from "../../../scheduling/scheduler.js";
+import { logger } from "../../../utils/utils.js";
+import type { TaskInputAdapter } from "../../contracts/taskInputAdapter.js";
+import { runMainMenu } from "../../shared/mainMenu.js";
+import { PROMPT_BACK_TEXT } from "../../contracts/promptBack.js";
 import {
   rejectTelegramPromptBack,
   resolveTelegramCallbackData,
   TelegramPromptPort,
 } from "./telegramPromptPort.js";
-import { logAdapter } from "../shared/adapterLogger.js";
+import { logAdapter } from "../../shared/adapterLogger.js";
 import {
   clearTelegramChatSession,
   getTelegramChatSession,
-} from "./telegramPromptSession.js";
+} from "../lib/telegramPromptSession.js";
 
 const TELEGRAM_ADAPTER_ID = "telegram";
 

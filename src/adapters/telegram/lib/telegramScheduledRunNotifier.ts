@@ -1,8 +1,8 @@
 import type { Bot } from "grammy";
-import type { RedeemTask } from "../../domain/task/redeemTask.js";
-import type { ScheduledRunNotifier } from "../contracts/scheduledRunNotifier.js";
-import { createScheduledRunHandler } from "../shared/scheduledRunHandler.js";
-import { TelegramPromptPort } from "./telegramPromptPort.js";
+import type { RedeemTask } from "../../../domain/task/redeemTask.js";
+import type { ScheduledRunNotifier } from "../../contracts/scheduledRunNotifier.js";
+import { createScheduledRunHandler } from "../../shared/scheduledRunHandler.js";
+import { TelegramPromptPort } from "../core/telegramPromptPort.js";
 import { getTelegramChatSession } from "./telegramPromptSession.js";
 
 function resolveTelegramChatId(task: RedeemTask): number | null {

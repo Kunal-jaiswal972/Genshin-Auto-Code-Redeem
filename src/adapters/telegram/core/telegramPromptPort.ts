@@ -1,21 +1,21 @@
 import { InlineKeyboard, type Api } from "grammy";
-import type { DisplayCard } from "../../domain/display/displayCard.js";
-import type { DisplayPresenter } from "../contracts/displayPresenter.js";
-import { formatDisplayCardTelegramHtml } from "../shared/formatters/formatDisplayCard.js";
-import type { PromptChoice, PromptOptions, PromptPort } from "../contracts/promptPort.js";
+import type { DisplayCard } from "../../../domain/display/displayCard.js";
+import type { DisplayPresenter } from "../../contracts/displayPresenter.js";
+import { formatDisplayCardTelegramHtml } from "../../shared/formatters/formatDisplayCard.js";
+import type { PromptChoice, PromptOptions, PromptPort } from "../../contracts/promptPort.js";
 import {
   PROMPT_BACK_LABEL,
   PromptBackError,
   TELEGRAM_BACK_CALLBACK,
-} from "../contracts/promptBack.js";
+} from "../../contracts/promptBack.js";
 import {
   createAdapterLogger,
   type AdapterLogger,
-} from "../shared/adapterLogger.js";
+} from "../../shared/adapterLogger.js";
 import type {
   PendingPromptKind,
   TelegramChatSession,
-} from "./telegramPromptSession.js";
+} from "../lib/telegramPromptSession.js";
 
 const TELEGRAM_ADAPTER_ID = "telegram";
 

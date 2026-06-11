@@ -55,11 +55,20 @@ src/
 │   ├── createEnabledAdapters.ts
 │   └── runApplication.ts      Unified bootstrap (dev + prod)
 ├── adapters/cli/
-│   ├── cliAdapterModule.ts    CLI adapter registration
-│   ├── createCliAdapter.ts    TaskInputAdapter implementation
-│   ├── createCliPorts.ts      PromptPort + DisplayPresenter for terminal
-│   └── prompts.ts             Clack-backed prompt helpers
-├── adapters/telegram/         telegramAdapterModule + grammY bot
+│   ├── core/
+│   │   ├── cliAdapterModule.ts   CLI adapter registration
+│   │   ├── cliAdapter.ts         TaskInputAdapter implementation
+│   │   └── cliPorts.ts           PromptPort + DisplayPresenter for terminal
+│   └── lib/
+│       └── prompts.ts            Clack-backed prompt helpers
+├── adapters/telegram/
+│   ├── core/
+│   │   ├── telegramAdapterModule.ts
+│   │   ├── telegramAdapter.ts       grammY bot + TaskInputAdapter
+│   │   └── telegramPromptPort.ts    PromptPort + DisplayPresenter for Telegram
+│   └── lib/
+│       ├── telegramPromptSession.ts
+│       └── telegramScheduledRunNotifier.ts
 ├── adapters/contracts/        PromptPort, DisplayPresenter, TaskInputAdapter, ScheduledRunNotifier
 ├── adapters/shared/
 │   ├── mainMenu.ts            Main menu loop (run / schedule / list / cancel / history)

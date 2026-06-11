@@ -1,9 +1,9 @@
-import type { TaskSource } from "../../domain/task/redeemTask.js";
-import type { TaskScheduler } from "../../scheduling/scheduler.js";
-import type { TaskInputAdapter } from "../contracts/taskInputAdapter.js";
-import type { DisplayPresenter } from "../contracts/displayPresenter.js";
-import type { PromptPort } from "../contracts/promptPort.js";
-import { runMainMenu } from "../shared/mainMenu.js";
+import type { TaskSource } from "../../../domain/task/redeemTask.js";
+import type { TaskScheduler } from "../../../scheduling/scheduler.js";
+import type { TaskInputAdapter } from "../../contracts/taskInputAdapter.js";
+import type { DisplayPresenter } from "../../contracts/displayPresenter.js";
+import type { PromptPort } from "../../contracts/promptPort.js";
+import { runMainMenu } from "../../shared/mainMenu.js";
 
 const CLI_ADAPTER_ID = "cli";
 

@@ -1,7 +1,7 @@
-import { ConfigError } from "../../domain/errors.js";
-import type { AdapterModule } from "../registry/adapterModule.js";
-import { createTelegramAdapter } from "./createTelegramAdapter.js";
-import { createTelegramScheduledRunNotifier } from "./telegramScheduledRunNotifier.js";
+import { ConfigError } from "../../../domain/errors.js";
+import type { AdapterModule } from "../../registry/adapterModule.js";
+import { createTelegramAdapter } from "./telegramAdapter.js";
+import { createTelegramScheduledRunNotifier } from "../lib/telegramScheduledRunNotifier.js";
 
 export const telegramAdapterModule: AdapterModule = {
   id: "telegram",
