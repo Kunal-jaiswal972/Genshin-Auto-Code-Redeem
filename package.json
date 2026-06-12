@@ -8,7 +8,8 @@
     "build": "tsc",
     "dev": "tsx src/index.ts",
     "start": "npm run build && node dist/index.js",
-    "typecheck": "cross-env NODE_OPTIONS=--max-old-space-size=4096 tsc -p tsconfig.typecheck.json --noEmit"
+    "typecheck": "cross-env NODE_OPTIONS=--max-old-space-size=4096 tsc -p tsconfig.typecheck.json --noEmit",
+    "docker:reset": "docker compose -f deploy/docker-compose.yml down -v && docker compose -f deploy/docker-compose.yml up --build -d"
   },
   "keywords": [],
   "author": "",

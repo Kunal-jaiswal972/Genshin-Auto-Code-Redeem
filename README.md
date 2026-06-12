@@ -65,7 +65,22 @@ cp .env.example .env
 # Set TELEGRAM_BOT_TOKEN; set CLI_ADAPTER_ENABLED=false for headless containers
 
 cd deploy
-docker compose up --build
+docker compose up --build -d
+```
+
+**Wipe all persisted data and start fresh** (SQLite DB, `codes.json`, Chrome profile under `/data`):
+
+```bash
+cd deploy
+docker compose down -v && docker compose up --build -d
+```
+
+`-v` removes the `redeemer-data` volume. Your `.env` on the host is **not** deleted. Scheduled tasks, run history, scraped codes, and the Hoyoverse login session in the Chrome profile are erased.
+
+From the repo root (same effect):
+
+```bash
+npm run docker:reset
 ```
 
 ---
