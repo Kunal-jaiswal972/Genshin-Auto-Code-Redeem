@@ -4,7 +4,7 @@ import {
   formatScheduleDescription,
   formatUpcomingRuns,
 } from "../../../scheduling/scheduleDisplay.js";
-import { formatSchedulerInstant } from "../../../scheduling/schedulerTimezone.js";
+import { formatSchedulerInstant } from "../../../scheduling/scheduleTime.js";
 import type { DisplayCard, DisplayCardRow } from "../../../domain/display/displayCard.js";
 
 export function buildScheduledTaskCard(task: ScheduledTask): DisplayCard {

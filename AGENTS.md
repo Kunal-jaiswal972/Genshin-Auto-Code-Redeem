@@ -88,7 +88,7 @@ src/
 │   ├── queries/               scheduledTaskQueries, runHistoryQueries
 │   └── presenters/            runResultFormatting
 ├── domain/                    task, result, schedule, schemas, display, errors
-├── scheduling/                SchedulerRunner, drivers/, weekdays, timeOfDay
+├── scheduling/                SchedulerRunner, drivers/, scheduleTime.ts, scheduleDisplay
 ├── infrastructure/storage/
 │   ├── stores/                codeStore, scheduledTaskStore, runHistoryStore ports
 │   ├── sqlite/                SQLite store implementations

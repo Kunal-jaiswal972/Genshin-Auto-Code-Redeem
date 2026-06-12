@@ -1,8 +1,11 @@
-import { formatTimeUntil } from "../utils/utils.js";
 import type { ScheduleSpec } from "../domain/schedule/scheduleSpec.js";
 import { computeNextRunAt } from "./drivers/scheduleDrivers.js";
-import { formatSchedulerInstant } from "./schedulerTimezone.js";
-import { formatTimeOfDayLabel } from "./timeOfDay.js";
+import {
+  advanceScheduleCursor,
+  formatSchedulerInstant,
+  formatTimeOfDayLabel,
+  formatTimeUntil,
+} from "./scheduleTime.js";
 import { formatWeekdayFullList, getWeekdayFullName } from "./weekdays.js";
 
 export function formatScheduleDescription(schedule: ScheduleSpec): string {
@@ -52,9 +55,7 @@ export function computeUpcomingRunTimes(
     }
 
     times.push(nextIso);
-    const nextDate = new Date(nextIso);
-    nextDate.setSeconds(nextDate.getSeconds() + 1);
-    cursor = nextDate;
+    cursor = advanceScheduleCursor(nextIso);
   }
 
   return times;

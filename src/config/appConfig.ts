@@ -11,7 +11,7 @@ import {
   DEFAULT_DATABASE_URL,
 } from "../infrastructure/storage/stores/codeStorePath.js";
 import type { AppConfig } from "../types/appConfig.js";
-import { isValidIanaTimeZone } from "../utils/utils.js";
+import { isValidIanaTimeZone } from "../scheduling/scheduleTime.js";
 
 const DEFAULT_SCHEDULER_POLL_INTERVAL_MS = 60_000;
 const DEFAULT_SCHEDULER_TIMEZONE = "Asia/Kolkata";

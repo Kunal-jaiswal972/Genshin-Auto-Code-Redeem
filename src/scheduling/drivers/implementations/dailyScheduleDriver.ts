@@ -3,7 +3,7 @@ import {
   addCalendarDaysInTimezone,
   atTimeOnDateInTimezone,
   getSchedulerTimezone,
-} from "../../schedulerTimezone.js";
+} from "../../scheduleTime.js";
 import type { ScheduleDriver } from "../createScheduleDriverRegistry.js";
 
 type DailySchedule = Extract<ScheduleSpec, { type: "daily" }>;

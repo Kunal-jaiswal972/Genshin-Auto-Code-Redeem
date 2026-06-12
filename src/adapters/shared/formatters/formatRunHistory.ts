@@ -3,7 +3,7 @@ import type { ScheduledTask } from "../../../domain/task/scheduledTask.js";
 import type { GameIdValue } from "../../../config/constants.js";
 import type { RunHistoryEntry } from "../../../domain/result/runHistoryEntry.js";
 import { getGameModule } from "../../../games/registry.js";
-import { formatSchedulerInstant } from "../../../scheduling/schedulerTimezone.js";
+import { formatSchedulerInstant } from "../../../scheduling/scheduleTime.js";
 import type { DisplayCard, DisplayCardRow } from "../../../domain/display/displayCard.js";
 
 function formatRunStatusLabel(status: RunResult["status"]): string {

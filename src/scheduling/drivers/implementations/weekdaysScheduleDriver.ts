@@ -4,7 +4,7 @@ import {
   atTimeOnDateInTimezone,
   getSchedulerTimezone,
   getWeekdayInTimezone,
-} from "../../schedulerTimezone.js";
+} from "../../scheduleTime.js";
 import type { ScheduleDriver } from "../createScheduleDriverRegistry.js";
 
 type WeekdaysSchedule = Extract<ScheduleSpec, { type: "weekdays" }>;

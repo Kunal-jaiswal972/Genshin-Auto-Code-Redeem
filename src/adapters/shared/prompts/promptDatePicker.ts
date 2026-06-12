@@ -3,11 +3,13 @@ import type { PromptPort } from "../../contracts/promptPort.js";
 import {
   addCalendarDaysInTimezone,
   atTimeOnDateInTimezone,
+  formatLongDateInTimezone,
+  getCalendarYearInTimezone,
   getSchedulerTimezone,
   startOfDayInTimezone,
   zonedDateTimeToUtc,
-} from "../../../scheduling/schedulerTimezone.js";
-import { formatTimeOfDayLabel } from "../../../scheduling/timeOfDay.js";
+  formatTimeOfDayLabel,
+} from "../../../scheduling/scheduleTime.js";
 import { promptTimeOfDay } from "./promptTimePicker.js";
 
 const MONTH_CHOICES = [
@@ -32,25 +34,12 @@ function daysInMonth(year: number, monthIndex: number): number {
   return new Date(year, monthIndex + 1, 0).getDate();
 }
 
-function formatLongDate(date: Date, timeZone: string): string {
-  return date.toLocaleDateString(undefined, {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    timeZone,
-  });
-}
-
 async function collectCustomDate(port: PromptPort): Promise<Date> {
   let step: DateStep = "month";
   let monthIndex = 0;
   const now = new Date();
   const timeZone = getSchedulerTimezone();
-  const year = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-  }).format(now);
+  const year = getCalendarYearInTimezone(now, timeZone);
 
   while (true) {
     if (step === "month") {
@@ -100,7 +89,7 @@ async function collectCustomDate(port: PromptPort): Promise<Date> {
         continue;
       }
 
-      port.gray(`Date: ${formatLongDate(date, timeZone)}`);
+      port.gray(`Date: ${formatLongDateInTimezone(date, timeZone)}`);
       return date;
     } catch (error) {
       if (isPromptBack(error)) {
@@ -125,13 +114,13 @@ async function collectCalendarDate(port: PromptPort): Promise<Date> {
 
   if (when === "today") {
     const date = startOfDayInTimezone(now, timeZone);
-    port.gray(`Date: ${formatLongDate(date, timeZone)}`);
+    port.gray(`Date: ${formatLongDateInTimezone(date, timeZone)}`);
     return date;
   }
 
   if (when === "tomorrow") {
     const date = addCalendarDaysInTimezone(now, 1, timeZone);
-    port.gray(`Date: ${formatLongDate(date, timeZone)}`);
+    port.gray(`Date: ${formatLongDateInTimezone(date, timeZone)}`);
     return date;
   }
 
@@ -176,7 +165,7 @@ export async function promptOnceDateTime(port: PromptPort): Promise<string> {
     }
 
     port.gray(
-      `Runs once on ${formatLongDate(runAt, timeZone)} at ${formatTimeOfDayLabel(timeOfDay)}`,
+      `Runs once on ${formatLongDateInTimezone(runAt, timeZone)} at ${formatTimeOfDayLabel(timeOfDay)}`,
     );
     return runAt.toISOString();
   }

@@ -2,7 +2,7 @@ import { createRedeemTask } from "../../../application/taskFactory.js";
 import type { TaskSource } from "../../../domain/task/redeemTask.js";
 import type { ScheduleSpec } from "../../../domain/schedule/scheduleSpec.js";
 import type { TaskScheduler } from "../../../scheduling/scheduler.js";
-import { formatSchedulerInstant } from "../../../scheduling/schedulerTimezone.js";
+import { formatSchedulerInstant } from "../../../scheduling/scheduleTime.js";
 import type { GameIdValue } from "../../../config/constants.js";
 import { isPromptBack } from "../../contracts/promptBack.js";
 import type { PromptPort } from "../../contracts/promptPort.js";
