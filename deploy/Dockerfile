@@ -19,7 +19,7 @@ RUN npm run build \
 FROM node:20-bookworm-slim AS runtime
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends chromium \
+  && apt-get install -y --no-install-recommends chromium xvfb x11vnc \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -34,9 +34,11 @@ ENV NODE_ENV=production \
 COPY package.json package-lock.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+COPY deploy/docker-entrypoint.sh /docker-entrypoint.sh
 
-RUN mkdir -p /data/codes /data/chrome /data/debug
+RUN chmod +x /docker-entrypoint.sh \
+  && mkdir -p /data/codes /data/chrome /data/debug
 
 VOLUME ["/data"]
 
-CMD ["node", "dist/index.js"]
+ENTRYPOINT ["/docker-entrypoint.sh"]

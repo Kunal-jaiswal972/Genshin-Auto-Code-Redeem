@@ -8,6 +8,9 @@ services:
     shm_size: "1gb"
     volumes:
       - redeemer-data:/data
+    ports:
+      # Bind to VM localhost only — reach via SSH tunnel (see README debug deploy).
+      - "127.0.0.1:5900:5900"
     restart: unless-stopped
 
 volumes:

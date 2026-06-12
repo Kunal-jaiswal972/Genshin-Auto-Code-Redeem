@@ -68,6 +68,25 @@ cd deploy
 docker compose up --build -d
 ```
 
+**Azure VM (debug branch)** — HoYoverse captcha blocks headless login. Deploy from `debug`, seed session once via VNC, then switch to headless:
+
+```bash
+git checkout debug && git pull
+# In .env for first login:
+#   CHROME_VNC_ENABLED=true
+#   HEADLESS=false
+#   CHROME_USER_DATA_DIR=/data/chrome
+cd deploy && docker compose up --build -d
+```
+
+From your PC, tunnel VNC and connect a viewer to `localhost:5900`:
+
+```bash
+ssh -L 5900:127.0.0.1:5900 Combo-BOTS-VM@<vm-ip>
+```
+
+Trigger a redeem in Telegram and solve the slide captcha in the VNC window. After `"Log Out"` works, set `CHROME_VNC_ENABLED=false` and `HEADLESS=true` in `.env`, then `docker compose up --build -d`. The session persists in `/data/chrome`.
+
 **Wipe all persisted data and start fresh** (SQLite DB, `codes.json`, Chrome profile under `/data`):
 
 ```bash

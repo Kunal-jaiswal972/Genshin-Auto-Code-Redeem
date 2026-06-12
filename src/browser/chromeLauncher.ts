@@ -49,6 +49,14 @@ function buildChromeSpawnArgs(options: ChromeLaunchOptions): string[] {
       "--disable-gpu",
       "--disable-blink-features=AutomationControlled",
     );
+  } else if (process.platform !== "win32") {
+    args.push(
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--window-size=1280,800",
+      "--disable-blink-features=AutomationControlled",
+    );
   }
 
   return args;
