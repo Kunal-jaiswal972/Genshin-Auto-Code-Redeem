@@ -575,6 +575,10 @@ CLI / Telegram / Discord / HTTP  →  Capability router menu  →  capabilityMod
 - [ ] `src/infrastructure/reporting/emailReporter.ts`
 - [ ] Subscribe to `WorkflowEvent` on event bus (post-run hook)
 
+### Concurrent scheduled runs
+
+- [ ] Scheduler should support multiple concurrent scheduled runs without blocking — separate from the main event loop / job queue; do not block on `ticking` while long redeem runs execute
+
 ---
 
 ## Changelog

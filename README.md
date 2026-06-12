@@ -183,6 +183,7 @@ Copy `.env.example` → `.env`. Application config only — no game credentials.
 | `CODE_STORE_BASE_PATH` | Base dir for per-game `codes.json` |
 | `DATABASE_URL` | `file:...` (SQLite) or `json:...` (fallback) |
 | `SCHEDULER_POLL_INTERVAL_MS` | Scheduler poll interval (default 60000) |
+| `SCHEDULER_TIMEZONE` | IANA timezone for schedules and display (default `Asia/Kolkata`) |
 | `CHROME_*`, `HEADLESS` | Browser launch |
 | `TELEGRAM_BOT_TOKEN` | Bot token from @BotFather |
 | `TELEGRAM_ENABLED` | `false` to disable bot while keeping token |

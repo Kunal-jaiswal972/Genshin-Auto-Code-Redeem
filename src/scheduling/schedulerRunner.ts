@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { RedeemTask } from "../domain/task/redeemTask.js";
 import type { ScheduledTask } from "../domain/task/scheduledTask.js";
 import type { ScheduledTaskStore } from "../infrastructure/storage/stores/scheduledTaskStore.js";
-import { formatScheduleInstant, logger } from "../utils/utils.js";
+import { formatSchedulerInstant } from "./schedulerTimezone.js";
+import { logger } from "../utils/utils.js";
 import {
   computeNextRunAt,
   rescheduleAfterRun,
@@ -190,11 +191,11 @@ export class SchedulerRunner implements TaskScheduler {
     );
 
     logger.step(
-      `Scheduled task ${scheduled.id} triggered at ${formatScheduleInstant(claimedAt.toISOString())}.`,
+      `Scheduled task ${scheduled.id} triggered at ${formatSchedulerInstant(claimedAt.toISOString())}.`,
     );
 
     if (nextRunAt) {
-      logger.gray(`Next run: ${formatScheduleInstant(nextRunAt)}`);
+      logger.gray(`Next run: ${formatSchedulerInstant(nextRunAt)}`);
     }
 
     try {

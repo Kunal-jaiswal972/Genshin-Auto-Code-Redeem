@@ -4,7 +4,7 @@ import {
   formatScheduleDescription,
   formatUpcomingRuns,
 } from "../../../scheduling/scheduleDisplay.js";
-import { formatScheduleInstant } from "../../../utils/utils.js";
+import { formatSchedulerInstant } from "../../../scheduling/schedulerTimezone.js";
 import type { DisplayCard, DisplayCardRow } from "../../../domain/display/displayCard.js";
 
 export function buildScheduledTaskCard(task: ScheduledTask): DisplayCard {
@@ -24,7 +24,7 @@ export function buildScheduledTaskCard(task: ScheduledTask): DisplayCard {
   if (task.lastRunAt) {
     rows.push({
       label: "Last run",
-      value: formatScheduleInstant(task.lastRunAt),
+      value: formatSchedulerInstant(task.lastRunAt),
     });
   }
 

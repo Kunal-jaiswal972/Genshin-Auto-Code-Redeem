@@ -3,7 +3,7 @@ import type { ScheduledTask } from "../../../domain/task/scheduledTask.js";
 import type { GameIdValue } from "../../../config/constants.js";
 import type { RunHistoryEntry } from "../../../domain/result/runHistoryEntry.js";
 import { getGameModule } from "../../../games/registry.js";
-import { formatScheduleInstant } from "../../../utils/utils.js";
+import { formatSchedulerInstant } from "../../../scheduling/schedulerTimezone.js";
 import type { DisplayCard, DisplayCardRow } from "../../../domain/display/displayCard.js";
 
 function formatRunStatusLabel(status: RunResult["status"]): string {
@@ -77,8 +77,8 @@ export function buildRunHistoryCard(
     { label: "Game", value: game.displayName },
     { label: "Status", value: formatRunStatusLabel(entry.status) },
     { label: "Source", value: entry.source },
-    { label: "Started", value: formatScheduleInstant(entry.startedAt) },
-    { label: "Finished", value: formatScheduleInstant(entry.finishedAt) },
+    { label: "Started", value: formatSchedulerInstant(entry.startedAt) },
+    { label: "Finished", value: formatSchedulerInstant(entry.finishedAt) },
     { label: "Duration", value: formatDuration(entry.startedAt, entry.finishedAt) },
   ];
 

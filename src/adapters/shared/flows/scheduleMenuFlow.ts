@@ -2,7 +2,7 @@ import { createRedeemTask } from "../../../application/taskFactory.js";
 import type { TaskSource } from "../../../domain/task/redeemTask.js";
 import type { ScheduleSpec } from "../../../domain/schedule/scheduleSpec.js";
 import type { TaskScheduler } from "../../../scheduling/scheduler.js";
-import { formatScheduleInstant } from "../../../utils/utils.js";
+import { formatSchedulerInstant } from "../../../scheduling/schedulerTimezone.js";
 import type { GameIdValue } from "../../../config/constants.js";
 import { isPromptBack } from "../../contracts/promptBack.js";
 import type { PromptPort } from "../../contracts/promptPort.js";
@@ -71,7 +71,7 @@ export async function scheduleMenuFlow(
     });
 
     port.success(`Scheduled task created: ${scheduled.id}`);
-    port.gray(`Next run: ${formatScheduleInstant(scheduled.nextRunAt)}`);
+    port.gray(`Next run: ${formatSchedulerInstant(scheduled.nextRunAt)}`);
     port.gray("Keep this process running — scheduled tasks fire while dev or start is active.");
     return;
   }

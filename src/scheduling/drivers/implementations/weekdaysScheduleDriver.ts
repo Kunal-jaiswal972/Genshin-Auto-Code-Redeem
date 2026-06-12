@@ -1,5 +1,10 @@
 import type { ScheduleSpec } from "../../../domain/schedule/scheduleSpec.js";
-import { atTimeOnDate } from "../../timeOfDay.js";
+import {
+  addCalendarDaysInTimezone,
+  atTimeOnDateInTimezone,
+  getSchedulerTimezone,
+  getWeekdayInTimezone,
+} from "../../schedulerTimezone.js";
 import type { ScheduleDriver } from "../createScheduleDriverRegistry.js";
 
 type WeekdaysSchedule = Extract<ScheduleSpec, { type: "weekdays" }>;
@@ -13,18 +18,18 @@ function computeWeekdaysNextRun(
     throw new Error("Select at least one weekday.");
   }
 
+  const timeZone = getSchedulerTimezone();
   const sortedDays = [...days].sort((left, right) => left - right);
 
   for (let offset = 0; offset <= 7; offset += 1) {
-    const candidateDate = new Date(from);
-    candidateDate.setDate(candidateDate.getDate() + offset);
-    const weekday = candidateDate.getDay();
+    const candidateDate = addCalendarDaysInTimezone(from, offset, timeZone);
+    const weekday = getWeekdayInTimezone(candidateDate, timeZone);
 
     if (!sortedDays.includes(weekday)) {
       continue;
     }
 
-    const candidate = atTimeOnDate(candidateDate, at);
+    const candidate = atTimeOnDateInTimezone(candidateDate, at, timeZone);
 
     if (candidate > from) {
       return candidate;

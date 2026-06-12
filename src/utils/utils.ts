@@ -38,7 +38,14 @@ export function formatWaitMs(ms: number): string {
   return `${ms}ms`;
 }
 
-export function formatScheduleInstant(iso: string | null | undefined): string {
+export interface FormatScheduleInstantOptions {
+  timeZone?: string;
+}
+
+export function formatScheduleInstant(
+  iso: string | null | undefined,
+  options?: FormatScheduleInstantOptions,
+): string {
   if (!iso) {
     return "none";
   }
@@ -52,7 +59,51 @@ export function formatScheduleInstant(iso: string | null | undefined): string {
   return date.toLocaleString(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
+    ...(options?.timeZone !== undefined ? { timeZone: options.timeZone } : {}),
   });
+}
+
+export function isValidIanaTimeZone(timeZone: string): boolean {
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function formatTimeUntil(iso: string, now: Date = new Date()): string {
+  const target = new Date(iso);
+
+  if (Number.isNaN(target.getTime())) {
+    return "";
+  }
+
+  const diffMs = target.getTime() - now.getTime();
+
+  if (diffMs <= 0) {
+    return "due now";
+  }
+
+  const diffMinutes = Math.floor(diffMs / 60_000);
+
+  if (diffMinutes < 1) {
+    return "due now";
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+
+  if (diffHours >= 24) {
+    const diffDays = Math.floor(diffHours / 24);
+    const dayLabel = diffDays === 1 ? "day" : "day(s)";
+    return `${diffDays} ${dayLabel} left`;
+  }
+
+  if (diffHours >= 1) {
+    return `${diffHours} hr left`;
+  }
+
+  return `${diffMinutes} min left`;
 }
 
 /** Fixed delay. Logs planned duration before waiting starts. */

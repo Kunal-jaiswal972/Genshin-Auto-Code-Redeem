@@ -11,8 +11,10 @@ import {
   DEFAULT_DATABASE_URL,
 } from "../infrastructure/storage/stores/codeStorePath.js";
 import type { AppConfig } from "../types/appConfig.js";
+import { isValidIanaTimeZone } from "../utils/utils.js";
 
 const DEFAULT_SCHEDULER_POLL_INTERVAL_MS = 60_000;
+const DEFAULT_SCHEDULER_TIMEZONE = "Asia/Kolkata";
 
 const booleanFromEnv = z
   .string()
@@ -39,6 +41,13 @@ function resolveTelegramEnabled(
 const appConfigSchema = z.object({
   CODE_STORE_BASE_PATH: z.string().min(1).default(DEFAULT_CODE_STORE_BASE_PATH),
   DATABASE_URL: z.string().min(1).default(DEFAULT_DATABASE_URL),
+  SCHEDULER_TIMEZONE: z
+    .string()
+    .min(1)
+    .default(DEFAULT_SCHEDULER_TIMEZONE)
+    .refine((timeZone) => isValidIanaTimeZone(timeZone), {
+      message: "Must be a valid IANA timezone identifier",
+    }),
   SCHEDULER_POLL_INTERVAL_MS: z.coerce
     .number()
     .int()
@@ -102,6 +111,7 @@ export function getAppConfig(): AppConfig {
   cachedAppConfig = {
     codeStoreBasePath: path.resolve(raw.CODE_STORE_BASE_PATH),
     databaseUrl: raw.DATABASE_URL,
+    schedulerTimezone: raw.SCHEDULER_TIMEZONE,
     schedulerPollIntervalMs: raw.SCHEDULER_POLL_INTERVAL_MS,
     cliAdapterEnabled: raw.CLI_ADAPTER_ENABLED,
     telegramBotToken: hasTelegramToken ? telegramToken : null,

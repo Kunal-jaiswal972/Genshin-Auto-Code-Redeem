@@ -1,14 +1,20 @@
 import type { ScheduleSpec } from "../../../domain/schedule/scheduleSpec.js";
-import { atTimeOnDate } from "../../timeOfDay.js";
+import {
+  addCalendarDaysInTimezone,
+  atTimeOnDateInTimezone,
+  getSchedulerTimezone,
+} from "../../schedulerTimezone.js";
 import type { ScheduleDriver } from "../createScheduleDriverRegistry.js";
 
 type DailySchedule = Extract<ScheduleSpec, { type: "daily" }>;
 
 function computeDailyNextRun(at: string, from: Date): Date {
-  const candidate = atTimeOnDate(from, at);
+  const timeZone = getSchedulerTimezone();
+  const candidate = atTimeOnDateInTimezone(from, at, timeZone);
 
   if (candidate <= from) {
-    candidate.setDate(candidate.getDate() + 1);
+    const nextDay = addCalendarDaysInTimezone(from, 1, timeZone);
+    return atTimeOnDateInTimezone(nextDay, at, timeZone);
   }
 
   return candidate;

@@ -1,5 +1,12 @@
 import { isPromptBack } from "../../contracts/promptBack.js";
 import type { PromptPort } from "../../contracts/promptPort.js";
+import {
+  addCalendarDaysInTimezone,
+  atTimeOnDateInTimezone,
+  getSchedulerTimezone,
+  startOfDayInTimezone,
+  zonedDateTimeToUtc,
+} from "../../../scheduling/schedulerTimezone.js";
 import { formatTimeOfDayLabel } from "../../../scheduling/timeOfDay.js";
 import { promptTimeOfDay } from "./promptTimePicker.js";
 
@@ -25,35 +32,25 @@ function daysInMonth(year: number, monthIndex: number): number {
   return new Date(year, monthIndex + 1, 0).getDate();
 }
 
-function startOfLocalDay(date: Date): Date {
-  const next = new Date(date);
-  next.setHours(0, 0, 0, 0);
-  return next;
-}
-
-function formatLongDate(date: Date): string {
+function formatLongDate(date: Date, timeZone: string): string {
   return date.toLocaleDateString(undefined, {
     weekday: "long",
     year: "numeric",
     month: "long",
     day: "numeric",
+    timeZone,
   });
-}
-
-function applyTimeToDate(date: Date, timeOfDay: string): Date {
-  const [hourText, minuteText] = timeOfDay.split(":");
-  const hours = Number.parseInt(hourText ?? "", 10);
-  const minutes = Number.parseInt(minuteText ?? "", 10);
-  const next = new Date(date);
-  next.setHours(hours, minutes, 0, 0);
-  return next;
 }
 
 async function collectCustomDate(port: PromptPort): Promise<Date> {
   let step: DateStep = "month";
   let monthIndex = 0;
   const now = new Date();
-  const year = now.getFullYear();
+  const timeZone = getSchedulerTimezone();
+  const year = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+  }).format(now);
 
   while (true) {
     if (step === "month") {
@@ -74,7 +71,7 @@ async function collectCustomDate(port: PromptPort): Promise<Date> {
       continue;
     }
 
-    const dayCount = daysInMonth(year, monthIndex);
+    const dayCount = daysInMonth(Number(year), monthIndex);
     const dayChoices = Array.from({ length: dayCount }, (_, index) => {
       const day = index + 1;
       return {
@@ -88,15 +85,22 @@ async function collectCustomDate(port: PromptPort): Promise<Date> {
         allowBack: true,
       });
       const day = Number.parseInt(dayValue, 10);
-      const date = startOfLocalDay(new Date(year, monthIndex, day));
-      const today = startOfLocalDay(new Date());
+      const date = zonedDateTimeToUtc({
+        year: Number(year),
+        month: monthIndex + 1,
+        day,
+        hours: 0,
+        minutes: 0,
+        timeZone,
+      });
+      const today = startOfDayInTimezone(now, timeZone);
 
       if (date < today) {
         port.warn("That date is in the past. Pick a future date.");
         continue;
       }
 
-      port.gray(`Date: ${formatLongDate(date)}`);
+      port.gray(`Date: ${formatLongDate(date, timeZone)}`);
       return date;
     } catch (error) {
       if (isPromptBack(error)) {
@@ -110,6 +114,9 @@ async function collectCustomDate(port: PromptPort): Promise<Date> {
 }
 
 async function collectCalendarDate(port: PromptPort): Promise<Date> {
+  const timeZone = getSchedulerTimezone();
+  const now = new Date();
+
   const when = await port.choose<DateWhenChoice>("Which date?", [
     { value: "today", label: "Today" },
     { value: "tomorrow", label: "Tomorrow" },
@@ -117,15 +124,14 @@ async function collectCalendarDate(port: PromptPort): Promise<Date> {
   ], { allowBack: true });
 
   if (when === "today") {
-    const date = startOfLocalDay(new Date());
-    port.gray(`Date: ${formatLongDate(date)}`);
+    const date = startOfDayInTimezone(now, timeZone);
+    port.gray(`Date: ${formatLongDate(date, timeZone)}`);
     return date;
   }
 
   if (when === "tomorrow") {
-    const date = startOfLocalDay(new Date());
-    date.setDate(date.getDate() + 1);
-    port.gray(`Date: ${formatLongDate(date)}`);
+    const date = addCalendarDaysInTimezone(now, 1, timeZone);
+    port.gray(`Date: ${formatLongDate(date, timeZone)}`);
     return date;
   }
 
@@ -134,6 +140,8 @@ async function collectCalendarDate(port: PromptPort): Promise<Date> {
 
 /** Guided date + time picker for one-shot schedules; returns ISO string. */
 export async function promptOnceDateTime(port: PromptPort): Promise<string> {
+  const timeZone = getSchedulerTimezone();
+
   while (true) {
     let date: Date;
 
@@ -159,7 +167,7 @@ export async function promptOnceDateTime(port: PromptPort): Promise<string> {
       throw error;
     }
 
-    const runAt = applyTimeToDate(date, timeOfDay);
+    const runAt = atTimeOnDateInTimezone(date, timeOfDay, timeZone);
     const now = new Date();
 
     if (runAt <= now) {
@@ -167,7 +175,9 @@ export async function promptOnceDateTime(port: PromptPort): Promise<string> {
       continue;
     }
 
-    port.gray(`Runs once on ${formatLongDate(runAt)} at ${formatTimeOfDayLabel(timeOfDay)}`);
+    port.gray(
+      `Runs once on ${formatLongDate(runAt, timeZone)} at ${formatTimeOfDayLabel(timeOfDay)}`,
+    );
     return runAt.toISOString();
   }
 }

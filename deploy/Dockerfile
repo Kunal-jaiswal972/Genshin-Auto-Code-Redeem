@@ -28,7 +28,8 @@ ENV NODE_ENV=production \
   HEADLESS=true \
   CHROME_EXECUTABLE_PATH=/usr/bin/chromium \
   CODE_STORE_BASE_PATH=/data/codes \
-  DATABASE_URL=file:/data/redeemer.db
+  DATABASE_URL=file:/data/redeemer.db \
+  SCHEDULER_TIMEZONE=Asia/Kolkata
 
 COPY package.json package-lock.json ./
 COPY --from=build /app/node_modules ./node_modules
