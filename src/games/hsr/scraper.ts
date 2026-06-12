@@ -1,4 +1,4 @@
-import type { ScrapedCodeRow } from "../../types/games.js";
+import type { ScrapedCodeRow } from "../scrapeTypes.js";
 import { hsrStubCodes } from "./config.js";
 
 export async function scrapeHsrCodes(): Promise<ScrapedCodeRow[]> {

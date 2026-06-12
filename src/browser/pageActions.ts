@@ -1,6 +1,6 @@
 import type { Browser, Frame, Page } from "puppeteer-core";
 import { BrowserConfig, Delays } from "../config/constants.js";
-import { BrowserError } from "../core/errors.js";
+import { BrowserError } from "../domain/errors.js";
 import type {
   ClearInputOptions,
   ClickElementOptions,

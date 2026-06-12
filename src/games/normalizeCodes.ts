@@ -2,7 +2,7 @@ import { CodeStatus } from "../config/constants.js";
 import type {
   NormalizedScrapedCode,
   ScrapedCodeRow,
-} from "../types/games.js";
+} from "./scrapeTypes.js";
 
 /** Flattens scraper rows into individual codes with a status for store upsert. */
 export function normalizeScrapedRows(

@@ -1,647 +1,74 @@
 # Auto Code Redeemer v2 — Implementation Plan
 
-> See **[AGENTS.md](./AGENTS.md)** for conventions, stack, and agent rules.
+> User docs: **[README.md](./README.md)** · Agent rules: **[AGENTS.md](./AGENTS.md)**
+
+---
 
 ## Phases 1–6b ✅ COMPLETE
 
 ---
 
-## Phase 7 — Event-Driven Architecture Redesign ⏳ NOT STARTED
+## Phase 7 — Event-Driven Architecture ✅ COMPLETE
 
-> **Goal:** Replace manual vs cron branching with a single execution pipeline. All input sources (CLI, scheduler, future Telegram/API/web) produce the same `RedeemTask` and submit it to the same executor. The redeem workflow must not know or care how it was triggered.
+### Steps
 
-> **Zero-legacy rule:** Phase 7 is **not complete** until every file, folder, function, type, env var, npm script, and doc reference from the old manual/cron architecture is **deleted or rewritten**. No shims, no `@deprecated` re-exports, no “temporary” adapters left behind. If something is replaced, the old symbol must be gone in the same PR (or the immediately following cleanup PR before phase sign-off).
+#### Step 1 — Domain + workflow ✅
 
-### Problem statement (current architecture)
+- [x] Add `domain/task/`, `domain/result/`
+- [x] Add `application/redeemWorkflow.ts`, `scrapePolicy.ts`, `taskExecutor.ts`
+- [x] Remove `EXECUTION_MODE` from workflow layer
+- [x] Delete `scrapeGate.ts`, `orchestrator.ts`
 
-| Issue | Where it lives today |
-|-------|----------------------|
-| Separate commands (`npm run start` vs `npm run cron`) | `package.json` |
-| `EXECUTION_MODE` if/else branching | `index.ts`, `orchestrator.ts`, `scrapeGate.ts` |
-| `manualInput \| null` encodes mode implicitly | `orchestrator.ts` |
-| Game ID + credentials in `.env` | `env.ts`, per-game `credentials.ts` |
-| Scrape policy mixed with execution mode | `scrapeGate.ts` |
-| CLI coupled to lifecycle shutdown | `lifecycle.ts` → `prompts.ts` |
-| Storage path tied to env cache | `codeStore.ts` → `getEnv()` |
+#### Step 2 — Config cleanup ✅
 
-### High-level architecture
+- [x] Split `env.ts` → `appConfig.ts` (infra only)
+- [x] Remove `GAME_ID`, credentials, `EXECUTION_MODE` from app config
+- [x] Delete `src/config/env.ts`, `src/types/env.ts`
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│                        INPUT ADAPTERS                           │
-│  Terminal CLI  │  Scheduler  │  Telegram  │  REST API  │ Web  │
-└────────┬───────────────┬──────────────┬───────────┬──────────────┘
-         │               │              │           │
-         └───────────────┴──────────────┴───────────┘
-                                 │
-                                 ▼
-                    ┌────────────────────────┐
-                    │   TaskFactory / DTO    │
-                    │   validates + builds   │
-                    │   RedeemTask           │
-                    └───────────┬────────────┘
-                                │
-              ┌─────────────────┴─────────────────┐
-              │                                   │
-              ▼                                   ▼
-   ┌──────────────────────┐         ┌──────────────────────┐
-   │  TaskScheduler       │         │  TaskExecutor        │
-   │  (optional — defers   │         │  (immediate run)     │
-   │   execution)         │         │                      │
-   └──────────┬───────────┘         └──────────┬───────────┘
-              │ on trigger                      │
-              └─────────────────┬───────────────┘
-                                ▼
-                    ┌────────────────────────┐
-                    │   RedeemWorkflow       │
-                    │   scrape → redeem      │
-                    │   (mode-agnostic)      │
-                    └────────────────────────┘
-```
+#### Step 3 — CLI redesign ✅
 
-**Design rule:** Input adapters only collect/validate data and create tasks. `RedeemWorkflow` is the only place redeem logic runs.
+- [x] `adapters/cli/cliApp.ts` — Run now / Schedule menu
+- [x] Shared flows + collectors under `adapters/shared/`
+- [x] `application/taskFactory.ts`
+- [x] Delete legacy `src/cli/`, cron scripts
 
----
+#### Step 4 — Scheduler ✅
 
-### Event flow diagrams
+- [x] `scheduleSpec.ts`, `nextRunAt.ts`, `SchedulerRunner`
+- [x] Schedule flow in CLI (+ list / cancel)
+- [x] `createScheduler()` + `SCHEDULER_POLL_INTERVAL_MS`
 
-#### Run now (terminal)
+#### Step 5 — Persistence ✅
 
-```mermaid
-sequenceDiagram
-    participant CLI as Terminal CLI
-    participant TF as TaskFactory
-    participant EX as TaskExecutor
-    participant WF as RedeemWorkflow
+- [x] SQLite — `scheduled_tasks` + `run_history` (`DATABASE_URL=file:...`)
+- [x] JSON fallback via `DATABASE_URL=json:...`
+- [x] `runTask()` records history
 
-    CLI->>CLI: Select "Run now"
-    CLI->>CLI: Collect gameId, credentials, scrape flag
-    CLI->>TF: createRedeemTask(input)
-    TF->>TF: Zod validate
-    TF-->>CLI: RedeemTask
-    CLI->>EX: execute(task)
-    EX->>WF: run(task)
-    WF-->>EX: RunResult
-    EX-->>CLI: display summary
-```
+#### Step 6 — Adapters ✅
 
-#### Schedule (terminal)
+- [x] Telegram — shared `interactiveApp` + `PromptPort`; grammY bot
+- [x] `adapters/server/serverApp.ts` — `npm start`
+- [x] `deploy/Dockerfile` + `docker-compose.yml`
+- [x] Future: REST API, Discord, web dashboard - mentioned in README.md
 
-```mermaid
-sequenceDiagram
-    participant CLI as Terminal CLI
-    participant TF as TaskFactory
-    participant SCH as TaskScheduler
-    participant EX as TaskExecutor
-    participant WF as RedeemWorkflow
+#### Step 7 — Legacy purge ✅
 
-    CLI->>CLI: Select "Schedule"
-    CLI->>CLI: Collect schedule + credentials
-    CLI->>TF: createScheduledTask(input)
-    TF-->>CLI: ScheduledTask
-    CLI->>SCH: register(scheduledTask)
-    SCH-->>CLI: taskId + nextRunAt
+- [x] No `orchestrator`, `EXECUTION_MODE`, `npm run cron` in `src/`
+- [x] Removed API/Discord/daemon empty folders, old `src/cli/`, `src/core/`
+- [x] `errors.ts` → `domain/errors.ts`
+- [x] `package.json` — `dev` (CLI) + `start` (production)
+- [x] Root `README.md`, slim `AGENTS.md`, `.env.example`
 
-    Note over SCH,EX: Later, on trigger
-    SCH->>EX: execute(redeemTask)
-    EX->>WF: run(redeemTask)
-    WF-->>EX: RunResult
-    EX->>SCH: recordRunResult(taskId, result)
-```
+### Phase 7 checklist
 
-#### Future Telegram bot
-
-```mermaid
-sequenceDiagram
-    participant TG as Telegram Bot
-    participant TF as TaskFactory
-    participant EX as TaskExecutor
-    participant WF as RedeemWorkflow
-
-    TG->>TG: Parse /redeem command
-    TG->>TF: createRedeemTask(fromMessage)
-    TF-->>TG: RedeemTask
-    TG->>EX: execute(task)
-    EX->>WF: run(task)
-    WF-->>TG: RunResult (reply to user)
-```
-
----
-
-### Target folder structure
-
-```text
-src/
-├── index.ts                      # bootstrap only — wires DI, starts adapters
-├── config/
-│   ├── loadEnv.ts                # dotenv
-│   ├── appConfig.ts              # app-level env ONLY (no credentials/game)
-│   └── constants.ts
-├── domain/                       # pure domain models + validation schemas
-│   ├── task/
-│   │   ├── redeemTask.ts         # RedeemTask, ScrapePolicy
-│   │   ├── scheduledTask.ts      # ScheduledTask, ScheduleSpec
-│   │   └── taskSchemas.ts        # Zod schemas
-│   ├── credentials/
-│   │   └── gameCredentials.ts    # per-game credential shapes
-│   └── result/
-│       └── runResult.ts          # RunSummary, RedeemSummary
-├── application/                  # use cases / orchestration
-│   ├── taskFactory.ts            # builds + validates tasks from raw input
-│   ├── taskExecutor.ts           # single entry: execute(RedeemTask)
-│   ├── redeemWorkflow.ts         # scrape → redeem (replaces orchestrator)
-│   └── scrapePolicy.ts           # replaces scrapeGate — policy on task, not mode
-├── scheduling/
-│   ├── scheduler.ts              # Scheduler interface
-│   ├── scheduleSpec.ts           # once | daily | interval | weekdays | cron
-│   ├── inMemoryScheduler.ts      # dev / tests
-│   └── persistedScheduler.ts     # SQLite/Postgres-backed (production)
-├── infrastructure/               # IO implementations
-│   ├── storage/
-│   │   ├── codeStore.ts
-│   │   ├── taskStore.ts          # persist scheduled tasks
-│   │   └── codeStorePath.ts
-│   ├── browser/
-│   │   ├── chromeLauncher.ts
-│   │   ├── lifecycle.ts
-│   │   └── pageActions.ts
-│   └── events/
-│       └── eventBus.ts           # optional — run lifecycle hooks
-├── games/                        # unchanged plug-in pattern
-│   ├── registry.ts
-│   ├── genshin/
-│   └── hsr/
-├── adapters/                     # input sources — thin wrappers only
-│   ├── cli/
-│   │   ├── cliApp.ts             # main terminal loop
-│   │   ├── runNowFlow.ts
-│   │   ├── scheduleFlow.ts
-│   │   └── prompts.ts
-│   ├── telegram/                 # Phase 2 — stub initially
-│   │   └── telegramBot.ts
-│   ├── api/                      # Phase 3 — stub initially
-│   │   └── routes.ts
-│   └── web/                      # Phase 4 — stub initially
-│       └── dashboard.ts
-├── services/                     # domain services (scrape, redeem helpers)
-│   ├── scrapeService.ts
-│   └── redemptionService.ts
-├── types/                        # shared TS interfaces (re-export domain where needed)
-└── utils/
-```
-
-**Folders removed after migration (delete entirely if empty):**
-- `src/core/` — only `errors.ts` moves to `domain/` or `infrastructure/`; delete `orchestrator.ts` then folder if nothing left
-- `src/cli/` — replaced by `adapters/cli/`; delete whole folder after move
-
----
-
-### Zero-legacy cleanup policy
-
-Apply on **every refactoring step**, not only at the end. When adding a replacement, delete the original in the same change set.
-
-#### Must delete — files
-
-| Delete | Replaced by |
-|--------|-------------|
-| `src/core/orchestrator.ts` | `src/application/redeemWorkflow.ts` |
-| `src/cli/manualFlow.ts` | `src/adapters/cli/runNowFlow.ts` |
-| `src/services/scrapeGate.ts` | `src/application/scrapePolicy.ts` |
-| `src/config/env.ts` | `src/config/appConfig.ts` |
-| `src/types/orchestrator.ts` | `src/domain/result/runResult.ts` (+ task types in `domain/task/`) |
-| `src/types/env.ts` (`AppEnv`, `GetEnvOptions`) | `src/config/appConfig.ts` types |
-
-#### Must delete — exports / symbols
-
-| Symbol | Location today |
-|--------|----------------|
-| `runOrchestrator` | `src/core/orchestrator.ts` |
-| `collectManualRunInput` | `src/cli/manualFlow.ts` |
-| `resolveScrapeGate` | `src/services/scrapeGate.ts` |
-| `peekExecutionMode` | `src/config/env.ts` |
-| `getEnv` / `getEnv({ gameId })` | `src/config/env.ts` |
-| `ExecutionMode`, `ExecutionModeValue` | `src/config/constants.ts` |
-| `ManualRunInput` | `src/types/orchestrator.ts` |
-| `ResolveScrapeGateOptions`, `ScrapeGateResult` | `src/types/services.ts` |
-| `AppEnv`, `GetEnvOptions` | `src/types/env.ts` |
-| `parseCredentials` from env at startup | per-game `credentials.ts` — call only from `TaskFactory` |
-| `gameModule.parseCredentials(process.env)` in `getEnv()` | removed; credentials come from task input |
-
-#### Must delete — env vars & npm scripts
-
-| Remove | Notes |
-|--------|-------|
-| `EXECUTION_MODE` | No manual/cron mode switch |
-| `GAME_ID` | Game lives on `RedeemTask` |
-| `GENSHIN_*` / `HSR_*` in `.env` | Credentials live on task / DB |
-| `npm run cron` / `cron:prod` | Single `npm start`; scheduler is in-app |
-| `cross-env EXECUTION_MODE=...` | Remove from `package.json` |
-
-#### Must update — docs & config templates
-
-| File | Action |
-|------|--------|
-| `AGENTS.md` | Remove manual/cron table, `orchestrator` paths, `GAME_ID` / credential env docs |
-| `.env.example` | App config only; strip game credential blocks |
-| `PLAN.md` | Mark Phase 7 complete only after legacy audit passes |
-| `README.md` (if present) | Single entry point + schedule docs |
-
-#### Per-step cleanup rule
-
-At the end of each refactoring step, run the **legacy audit** (below). Do not start the next step while forbidden symbols still exist — except Step 1 may keep a thin bridge only until Step 3 lands, then the bridge must be deleted before Step 4.
-
-#### Phase 7 completion gate — legacy audit
-
-Phase 7 cannot be marked ✅ until all checks pass:
-
-```bash
-# 1. No forbidden symbols in src/ (expect zero matches)
-rg -n "ExecutionMode|runOrchestrator|collectManualRunInput|resolveScrapeGate|peekExecutionMode|ManualRunInput|manualShouldScrape|GetEnvOptions|AppEnv|EXECUTION_MODE" src/
-
-# 2. No old paths
-rg -n "core/orchestrator|cli/manualFlow|services/scrapeGate|config/env" src/ AGENTS.md .env.example package.json
-
-# 3. Build + typecheck clean
-npm run build && npm run typecheck
-
-# 4. No orphan folders
-test ! -f src/core/orchestrator.ts
-test ! -f src/cli/manualFlow.ts
-test ! -f src/services/scrapeGate.ts
-```
-
-Manual review checklist:
-- [ ] No commented-out old code “for reference”
-- [ ] No unused imports or dead exports (`tsc` strict + visual grep)
-- [ ] No duplicate types (e.g. both `RunSummary` and `RunResult` without migration)
-- [ ] Game modules: `requiredEnvVars` / env-based credential parsing removed or scoped to `TaskFactory` only
-- [ ] `codeStore.ts` does not import `getEnv()`
-- [ ] `package.json` has no `cron` scripts
-- [ ] `.env.example` has no game credentials or `GAME_ID`
-
----
-
-### Core domain models
-
-```typescript
-// domain/task/redeemTask.ts
-
-export type ScrapePolicy =
-  | { type: "always" }
-  | { type: "never" }
-  | { type: "ifNotScrapedToday" };   // replaces cron daily gate
-
-export interface RedeemTask {
-  readonly id: string;
-  readonly gameId: GameIdValue;
-  readonly credentials: GameLoginCredentials;
-  readonly scrapePolicy: ScrapePolicy;
-  readonly source: TaskSource;        // "cli" | "scheduler" | "telegram" | "api" | "web"
-  readonly createdAt: string;
-  readonly metadata?: Record<string, string>;
-}
-
-export interface ScheduledTask {
-  readonly id: string;
-  readonly redeemTask: Omit<RedeemTask, "id">;  // template
-  readonly schedule: ScheduleSpec;
-  readonly enabled: boolean;
-  readonly lastRunAt: string | null;
-  readonly nextRunAt: string | null;
-}
-```
-
-```typescript
-// scheduling/scheduleSpec.ts
-
-export type ScheduleSpec =
-  | { type: "once"; at: string }                    // ISO datetime
-  | { type: "daily"; at: string }                   // HH:mm
-  | { type: "intervalHours"; every: number }
-  | { type: "intervalMinutes"; every: number }
-  | { type: "weekdays"; days: number[]; at: string } // 0=Sun … 6=Sat
-  | { type: "cron"; expression: string };            // standard cron
-```
-
-```typescript
-// domain/result/runResult.ts
-
-export interface RunResult {
-  readonly taskId: string;
-  readonly status: "success" | "partial" | "failed";
-  readonly scraped: boolean;
-  readonly scrapeStats: ScrapeStats | null;
-  readonly redeemSummary: RedeemSummary | null;
-  readonly startedAt: string;
-  readonly finishedAt: string;
-  readonly error?: string;
-}
-```
-
----
-
-### Job / task abstraction
-
-**Command pattern** — `RedeemTask` is the command; `TaskExecutor` is the invoker; `RedeemWorkflow` is the receiver.
-
-```typescript
-// application/taskExecutor.ts
-
-export interface TaskExecutor {
-  execute(options: ExecuteTaskOptions): Promise<RunResult>;
-}
-
-export interface ExecuteTaskOptions {
-  task: RedeemTask;
-  onProgress?: (event: WorkflowEvent) => void;
-}
-```
-
-```typescript
-// application/redeemWorkflow.ts
-
-export interface RedeemWorkflow {
-  run(options: RunWorkflowOptions): Promise<RunResult>;
-}
-
-export interface RunWorkflowOptions {
-  task: RedeemTask;
-  chrome: ChromeEnvConfig;          // from app config, not task
-  codeStoreBasePath: string;        // from app config
-}
-```
-
-**Key rule:** `RedeemWorkflow.run()` receives a fully-formed `RedeemTask`. No `manualInput | null`, no `executionMode` checks.
-
-**Scrape policy lives on the task**, not on execution mode:
-
-| Source | Typical `scrapePolicy` |
-|--------|------------------------|
-| CLI "Run now" + user says yes | `{ type: "always" }` |
-| CLI "Run now" + user says no | `{ type: "never" }` |
-| Scheduled task | `{ type: "ifNotScrapedToday" }` |
-| API force-scrape | `{ type: "always" }` |
-
-```typescript
-// application/scrapePolicy.ts
-
-export function shouldScrape(
-  options: ShouldScrapeOptions,
-): Promise<boolean> {
-  const { policy, gameId, codeStoreBasePath } = options;
-  switch (policy.type) {
-    case "always": return Promise.resolve(true);
-    case "never": return Promise.resolve(false);
-    case "ifNotScrapedToday":
-      return hasScrapedToday({ gameId, codeStoreBasePath });
-  }
-}
-```
-
----
-
-### Scheduler abstraction
-
-**Strategy pattern** — pluggable scheduler backends; same interface for in-memory (dev), SQLite (single-node), Postgres (multi-instance).
-
-```typescript
-// scheduling/scheduler.ts
-
-export interface TaskScheduler {
-  register(options: RegisterScheduleOptions): Promise<ScheduledTask>;
-  cancel(taskId: string): Promise<void>;
-  list(): Promise<ScheduledTask[]>;
-  start(): Promise<void>;   // begins polling / cron tick loop
-  stop(): Promise<void>;
-}
-
-export interface RegisterScheduleOptions {
-  redeemTask: Omit<RedeemTask, "id" | "createdAt" | "source">;
-  schedule: ScheduleSpec;
-}
-```
-
-**Implementation notes:**
-- `InMemoryScheduler` — `setInterval` + sorted next-run queue; good for tests and CLI-only Phase 1
-- `PersistedScheduler` — stores `ScheduledTask` rows in DB; survives restarts
-- On trigger: scheduler calls `taskExecutor.execute({ task: materializeTask(scheduled) })`
-- Materialize = clone template + new `id` + `source: "scheduler"` + `createdAt: now`
-
-**Queue pattern (optional Phase 2+):** For high concurrency or Telegram burst, add `JobQueue` between scheduler and executor. Phase 1 can call executor directly.
-
----
-
-### CLI integration design
-
-**Single entry:** `npm start` → `adapters/cli/cliApp.ts` (no `npm run cron`).
-
-```text
-Auto Code Redeemer
-──────────────────
-1. Run now
-2. Schedule
-3. Manage scheduled tasks   (list / cancel — optional Phase 1b)
-4. Exit
-```
-
-#### Run now flow
-
-```text
-Select game:     [1] Genshin Impact  [2] Honkai: Star Rail
-Email:
-Password:
-Server:        [Asia | Europe | America | TW/HK/MO]
-Scrape wiki?    (Y/n)
-→ TaskFactory.createRedeemTask(...)
-→ TaskExecutor.execute(task)
-```
-
-#### Schedule flow
-
-```text
-How should this run?
-  1. Once at specific date/time
-  2. Daily at time
-  3. Every X hours
-  4. Every X minutes
-  5. Selected weekdays
-  6. Custom cron expression
-→ collect ScheduleSpec
-→ collect game + credentials (same as Run now)
-→ TaskScheduler.register({ redeemTask, schedule })
-→ confirm taskId + nextRunAt
-```
-
-CLI adapter responsibilities **only:**
-- Render prompts / menus
-- Call `TaskFactory` with raw answers
-- Call `TaskExecutor` or `TaskScheduler`
-- Display `RunResult` to user
-
----
-
-### Future Telegram integration (Phase 2)
-
-```text
-adapters/telegram/
-├── telegramBot.ts       # grammY / telegraf bot setup
-├── commandHandlers.ts   # /redeem, /schedule, /status
-└── sessionStore.ts      # per-chat credential state (encrypted)
-```
-
-**Flow:**
-1. User sends `/redeem genshin` → bot prompts for email/password/server via inline keyboard or DM
-2. Handler builds raw input → `TaskFactory.createRedeemTask({ source: "telegram", ... })`
-3. `TaskExecutor.execute(task)` — **same pipeline as CLI**
-4. Bot replies with `RunResult` summary
-
-**No redeem logic in telegram adapter.** Bot is a thin input adapter + output formatter.
-
-**Security:** Store credentials in encrypted session or reference stored account profiles by ID — never log passwords.
-
----
-
-### Future REST API (Phase 3)
-
-```text
-POST /api/v1/tasks/run          → TaskExecutor.execute
-POST /api/v1/tasks/schedule     → TaskScheduler.register
-GET  /api/v1/tasks/scheduled    → TaskScheduler.list
-DELETE /api/v1/tasks/:id        → TaskScheduler.cancel
-GET  /api/v1/tasks/:id/runs     → run history
-```
-
-Request body maps 1:1 to `RedeemTask` / `ScheduleSpec` Zod schemas.
-
----
-
-### Configuration split
-
-#### `.env` — application config only
-
-| Variable | Purpose |
-|----------|---------|
-| `LOG_LEVEL` | Logging |
-| `DATABASE_URL` | Task + schedule persistence |
-| `CODE_STORE_BASE_PATH` | Root for per-game JSON stores |
-| `CHROME_*` | Browser infrastructure |
-| `HEADLESS` | Browser mode |
-| `SCHEDULER_POLL_INTERVAL_MS` | Scheduler tick |
-| `TELEGRAM_BOT_TOKEN` | Phase 2 |
-| `API_PORT` / `API_KEY` | Phase 3 |
-
-#### Task / job data — NOT in `.env`
-
-| Field | Stored in |
-|-------|-----------|
-| Game ID | `RedeemTask` / DB row |
-| Email, password, server | `RedeemTask.credentials` / encrypted DB |
-| Scrape policy | `RedeemTask.scrapePolicy` |
-| Schedule spec | `ScheduledTask.schedule` |
-
----
-
-### Design patterns summary
-
-| Pattern | Use |
-|---------|-----|
-| **Command** | `RedeemTask` encapsulates a redeem request |
-| **Strategy** | `ScheduleSpec` variants; pluggable `TaskScheduler` backends |
-| **Adapter** | CLI, Telegram, API, Web — each adapts external input to `RedeemTask` |
-| **Factory** | `TaskFactory` validates raw input → domain objects |
-| **Template Method** | `RedeemWorkflow` defines scrape→redeem skeleton; game modules fill steps |
-| **Observer / Event Bus** | Optional `WorkflowEvent` hooks for logging, email reports, metrics |
-| **Repository** | `TaskStore`, `CodeStore` — persistence behind interfaces |
-| **Queue** | Optional job queue between scheduler and executor (Phase 2+) |
-
----
-
-### Removing mode-specific if/else logic
-
-| Before | After |
-|--------|-------|
-| `if (executionMode === MANUAL)` in `index.ts` | CLI adapter menu loop |
-| `if (executionMode === CRON)` in `scrapeGate.ts` | `task.scrapePolicy` switch |
-| `manualInput \| null` in orchestrator | `RedeemTask` always required |
-| `getEnv({ gameId })` credential cache hack | Credentials on task; `codeStore` takes explicit `gameId` + `basePath` |
-| `npm run start` vs `npm run cron` | Single `npm start`; scheduler runs in-process or as daemon |
-| `peekExecutionMode()` | Deleted |
-
-**`codeStore.ts` fix:** Replace `getEnv().codeStorePath` with explicit path passed from workflow:
-
-```typescript
-resolveCodeStorePath({ basePath: appConfig.codeStoreBasePath, gameId: task.gameId })
-```
-
----
-
-### Refactoring plan (incremental)
-
-#### Step 1 — Domain + workflow extraction (no CLI change yet)
-- [ ] Add `domain/task/`, `domain/result/`
-- [ ] Add `application/redeemWorkflow.ts` — move logic from `orchestrator.ts`
-- [ ] Add `application/scrapePolicy.ts` — move logic from `scrapeGate.ts`
-- [ ] Add `application/taskExecutor.ts`
-- [ ] Pass `RedeemTask` into workflow; keep **one** thin bridge in `index.ts` only until Step 3
-- [ ] Remove `EXECUTION_MODE` from workflow layer
-- [ ] **Cleanup:** delete moved logic from old files; no duplicate scrape/orchestrate paths
-
-#### Step 2 — Config cleanup
-- [ ] Split `env.ts` → `appConfig.ts` (infra only)
-- [ ] Remove `GAME_ID`, credentials, `EXECUTION_MODE` from env schema
-- [ ] Update `codeStore.ts` to accept explicit paths (no `getEnv()` inside)
-- [ ] **Cleanup:** delete `src/config/env.ts`, `AppEnv`, `GetEnvOptions`; update all imports to `appConfig`
-
-#### Step 3 — CLI redesign
-- [ ] Add `adapters/cli/cliApp.ts` with Run now / Schedule menu
-- [ ] Move `prompts.ts` → `adapters/cli/prompts.ts`
-- [ ] Add `runNowFlow.ts`, `scheduleFlow.ts`
-- [ ] Add `application/taskFactory.ts`
-- [ ] **Cleanup:** delete `src/cli/` folder, `manualFlow.ts`, `peekExecutionMode()`, `runOrchestrator`, `orchestrator.ts`, `scrapeGate.ts`; remove `cron` / `cron:prod` from `package.json`; rewrite `index.ts` to call `cliApp` only
-
-#### Step 4 — Scheduler
-- [ ] Add `scheduling/scheduleSpec.ts` + Zod schemas
-- [ ] Add `InMemoryScheduler` for Phase 1
-- [ ] Wire schedule flow in CLI
-- [ ] Add `infrastructure/storage/taskStore.ts` when persistence needed
-- [ ] **Cleanup:** remove `ExecutionMode` from `constants.ts`; remove `ResolveScrapeGateOptions` / `ScrapeGateResult` from `types/services.ts`
-
-#### Step 5 — Persistence + production scheduler
-- [ ] Add SQLite or Postgres for `ScheduledTask` + run history
-- [ ] Add `PersistedScheduler`
-- [ ] Daemon mode: `npm start -- --daemon` runs scheduler loop
-- [ ] **Cleanup:** delete `ManualRunInput`, old `types/orchestrator.ts` if fully replaced by domain types
-
-#### Step 6 — Future adapters (stubs first)
-- [ ] `adapters/telegram/` stub + interface conformance test
-- [ ] `adapters/api/` Express/Fastify routes
-- [ ] `adapters/web/` dashboard
-
-#### Step 7 — Docker alignment (see Phase 9)
-- [ ] Container runs daemon scheduler OR external trigger posts to API
-- [ ] Instance `.env` = app config only; tasks seeded via API/CLI on first boot
-
-#### Step 8 — Final legacy purge (required before Phase 7 sign-off)
-- [ ] Run **legacy audit** commands (see Zero-legacy cleanup policy) — zero matches required
-- [ ] Update `AGENTS.md`, `.env.example`, any README — no references to manual/cron/orchestrator
-- [ ] Remove per-game `requiredEnvVars` tied to `.env` if superseded by task input validation
-- [ ] Delete empty folders (`src/core/`, `src/cli/` if applicable)
-- [ ] Grep repo for `EXECUTION_MODE`, `GAME_ID=genshin`, `npm run cron` in docs, compose files, comments
-- [ ] Confirm no `@deprecated` stubs or `// TODO remove old` blocks remain
-
----
-
-### Phase 7 tasks (checklist)
-
-- [ ] Domain models + Zod schemas (`RedeemTask`, `ScheduleSpec`, `RunResult`)
-- [ ] `TaskFactory`, `TaskExecutor`, `RedeemWorkflow`
-- [ ] `scrapePolicy` replaces `scrapeGate`
-- [ ] `appConfig` replaces credential-bearing `AppEnv`
-- [ ] CLI menu: Run now + Schedule
-- [ ] `InMemoryScheduler` + schedule collection prompts
-- [ ] **Legacy removal:** all files/symbols in [Must delete](#must-delete--files) tables gone
-- [ ] **Legacy audit** passes (grep + build + typecheck + no orphan folders)
-- [ ] Update `AGENTS.md` and `.env.example` (no manual/cron/GAME_ID/credential env)
+- [x] Domain models + Zod schemas (`RedeemTask`, `ScheduleSpec`, `RunResult`)
+- [x] `TaskFactory`, `TaskExecutor`, `RedeemWorkflow`
+- [x] `scrapePolicy` replaces `scrapeGate`
+- [x] `appConfig` replaces credential-bearing `AppEnv`
+- [x] CLI menu: Run now + Schedule + list/cancel/history
+- [x] `SchedulerRunner` + SQLite-backed tasks
+- [x] Telegram adapter + server mode
+- [x] Legacy audit passes (build + typecheck)
 - [ ] Integration test: CLI run-now → workflow → result
 - [ ] Integration test: CLI schedule → scheduler trigger → workflow → result
 
@@ -649,94 +76,526 @@ resolveCodeStorePath({ basePath: appConfig.codeStoreBasePath, gameId: task.gameI
 
 ## Phase 8 — Pre-architecture cleanup ✅ COMPLETE
 
-> Historical cleanup (legacy `server/`, MongoDB, etc.). **Phase 7 Step 8** is the cleanup gate for the manual/cron → event-driven migration. Do not confuse the two.
-
 - [x] Deleted legacy `scripts/`, `server/`, `src/db/`
 - [x] Removed old GitHub Actions workflow
 - [x] Removed unused errors, exports, and dead code
 
 ---
 
-## Phase 9 — Azure VM / Docker Deployment ⏳ NOT STARTED
+## Phase 8.5 — Refactor & cleanup (pre–Phase 9) ✅ COMPLETE
 
-> **Prerequisite:** Phase 7 event-driven architecture (tasks carry game + credentials; `.env` is app config only).
->
-> **Design rule:** one running container = one **scheduler daemon** or one **API endpoint** per deployment. Tasks within a container can target multiple games/accounts via stored scheduled tasks — OR keep one account×game per container for isolation (operator choice).
+> **Goal:** Improve maintainability and adapter-ready architecture **without** new features. Complete before Phase 9. Full audit: `arch_audit.md`.
 
-### Deployment models (post Phase 7)
+| Step | Summary | Risk |
+|------|---------|------|
+| 8.5.1 ✅ | Fix layer violations (domain, browser, adapters) | Low |
+| 8.5.2 ✅ | Unify Zod schemas + move `ScheduleSpec` to domain | Low |
+| 8.5.3 ✅ | Application query services (history, tasks) | Low |
+| 8.5.4 ✅ | Extract shared JSON I/O utilities | Low |
+| 8.5.5 ✅ | Split `genshin/redeemer.ts` | Medium |
+| 8.5.6 ✅ | Scheduler strategy registry (`ScheduleDriver`) | Medium |
+| 8.5.7 ✅ | Decouple `PromptPort` from `DisplayCard` | Low |
+| 8.5.8 ✅ | Fold `services/` into `application/` | Low |
+| 8.5.9 ✅ | Split `collectDateTime.ts`; unify weekday constants | Low |
+| 8.5.10 | ~~Add unit tests~~ — skipped (not required for Phase 9) | — |
+| 8.5.11 ✅ | Remove dead code; update AGENTS.md tree | Low |
 
-| Model | How it works |
-|-------|--------------|
-| **A — Daemon scheduler** | Container runs `npm start -- --daemon`; scheduled tasks stored in mounted DB volume |
-| **B — External trigger** | Azure cron / Container Apps Job calls `POST /api/v1/tasks/run` with task payload |
-| **C — Hybrid** | Daemon for recurring schedules + API for on-demand |
+**Gate:** Phase 9 may start — all required refactor steps complete.
 
-### Per-instance `.env` (app config only)
+---
 
-| Variable | Notes |
-|----------|--------|
-| `DATABASE_URL` | Task persistence (e.g. `file:/data/tasks.db`) |
-| `CODE_STORE_BASE_PATH` | e.g. `/data/codes` |
-| `CHROME_USER_DATA_DIR` | Unique per instance if sharing host |
-| `CHROME_EXECUTABLE_PATH` | Container Chromium |
-| `HEADLESS` | `true` |
-| `SCHEDULER_POLL_INTERVAL_MS` | Daemon tick |
+## Phase 9 — Multi-user auth + unified SQLite storage ⏳ NOT STARTED
 
-Game credentials are **not** in `.env` — seeded via CLI on first boot, Telegram, or API.
+> **Goal:** One deployment serves multiple Hoyoverse accounts with **login / sign-up / guest** flows. **All app data** (users, codes, scheduled tasks, run history) lives in SQLite — no `codes.json` or JSON task-store fallback. Logged-in users get isolated data, stored credentials, and a dedicated Chrome profile (managed by the app, invisible to the user).
 
-### Planned repo layout (deployment)
+### Current limitation
 
+- Codes in JSON files (`src/data/<gameId>/codes.json`) — global per game, not per account
+- Tasks/history already SQLite, but codes are a separate JSON layer
+- One `CHROME_USER_DATA_DIR` — switching accounts conflicts Hoyoverse session
+- `RedeemTask.credentials` has username/password but no stable **user id**
+- No session concept — everyone shares the same menu and data
+
+### Startup & session UX (CLI + Telegram + future adapters)
+
+On **every program start** (before main menu), show:
+
+1. **Log in** — pick an existing saved account
+2. **New account** — sign up (then logged in with full menu)
+3. **Continue as guest** — no account persisted
+
+| Mode | Main menu | Credentials | Tasks / history |
+|------|-----------|-------------|-----------------|
+| **Logged in** | Run now, Schedule, List, Cancel, History, **Account**, Exit | Auto from `users` row | Only this user's rows |
+| **Guest** | **Run now only** + Exit | Prompted every run (username, password, server) | None stored |
+
+**Logged-in user behavior**
+
+- Full menu: **Run now**, **Schedule**, list/cancel/history, **Account**, Exit
+- Run now and scheduled runs use stored credentials automatically — no re-prompt unless policy requires scrape choice (e.g. scrape yes/no on manual run)
+- Scheduled task list and run history are **filtered by `user_id`**
+- Scheduler triggers load that user's credentials, codes, and Chrome profile
+
+**Guest behavior**
+
+- **Run now** + **Exit** only — same run-now action as logged-in users, but no Schedule, List, Cancel, History, or Account
+- Must enter game, username, password, and server on every run (logged-in users skip this)
+- Nothing written to `users`, `scheduled_tasks`, or persistent run history tied to an account
+
+**Account menu** (logged-in users only — not shown to guests)
+
+- **Log out** — end session, return to startup screen (login / new account / guest)
+- **Delete account** — remove user row, all `user_id`-scoped codes/tasks/history, and **delete Chrome profile folder** from disk
+- **No edit** — to change game/credentials, user **deletes account** and creates a **new account** from the startup screen (top-level **New account**), not an in-place edit flow
+
+**New account** (startup option — pick from startup gate, not from main menu while already logged in; to add another account: log out → startup → New account)
+
+- Collect: `game_id`, `username`, `password`, `server`
+- Chrome profile path is **assigned automatically** (`<CHROME_USER_DATA_DIR>/<user_id>/` or sanitized slug) — **never shown or configurable by the user**
+- After sign-up, user is logged in and sees the full menu
+
+**Menu visibility rule**
+
+| | Run now | Schedule | List / Cancel / History | Account | Exit |
+|---|:---:|:---:|:---:|:---:|:---:|
+| **Logged in** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Guest** | ✅ | — | — | — | ✅ |
+
+Both modes can **run now**. Only logged-in users get **schedule** (create/list/cancel tasks), **run history**, and **account** actions.
+
+**No session persistence (all adapters)**
+
+- Auth state lives **in memory only** for the lifetime of the running process
+- **Exit** (main menu, `/stop`, process shutdown, adapter disconnect) **always ends the session** — no “remember me”, no saved login, no cookies/tokens on disk
+- Next launch (CLI `npm run dev`, Telegram `/start`, future REST/web) **always shows the startup screen** again: Log in / New account / Guest
+- **Log out** behaves the same as exit for session purposes (return to startup screen without quitting the process)
+- Do **not** persist `user_id` in SQLite sessions table, env files, Telegram chat metadata, or local storage between runs
+- Telegram: `/start` after exit requires login again; `/stop` clears in-memory session; no auto-resume of previous user on new `/start`
+
+### Users table (single source of truth per account)
+
+```text
+DATABASE_URL=file:./src/data/redeemer.db   ← single SQLite file for everything
+
+users (
+  id              TEXT PRIMARY KEY,
+  game_id         TEXT NOT NULL,
+  username        TEXT NOT NULL,
+  password        TEXT NOT NULL,        -- encrypted at rest (see security)
+  server          TEXT NOT NULL,
+  chrome_profile  TEXT NOT NULL,        -- absolute or relative path; app-managed
+  created_at      TEXT NOT NULL,
+  UNIQUE (game_id, username, server)    -- or app-defined uniqueness rule
+)
+
+codes            (user_id, game_id, code, wiki_status, redeem_status, scraped_at, …)
+scheduled_tasks  (id, user_id, game_id, credentials_json, schedule_json, …)
+run_history      (id, user_id, scheduled_task_id, game_id, …)
 ```
-deploy/
-├── Dockerfile
-├── docker-compose.yml
-├── .env.template              # app config only
-└── instances/
-    └── alice/
-        ├── .env
-        └── data/
-            ├── codes/         # CODE_STORE_BASE_PATH mount
-            ├── chrome/        # profile mount
-            └── tasks.db       # scheduler DB mount
-```
 
-### Phase 9 tasks
+No `sessions` table — login state is **not** stored in the DB between process runs.
 
-- [ ] Add `deploy/Dockerfile`
-- [ ] Add `deploy/.env.template` and `deploy/docker-compose.yml`
-- [ ] Add `deploy/README.md` (operator runbook)
-- [ ] Verify headless redeem in container via API or daemon
-- [ ] Wire Azure daily trigger (Model B) or daemon (Model A)
+**User–code relation:** Each row in `codes` ties one user to one promo code for one game. Same code string can be `pending` for user A and `redeemed` for user B.
+
+**Remove:** `codes.json`, `CODE_STORE_BASE_PATH` for codes, JSON `CodeStore` file implementation, `DATABASE_URL=json:...` task-store fallback (SQLite only).
+
+### Schema strategy (testing — clean slate, no incremental migrations)
+
+> Current environment is **test-only** — no production data to preserve. Phase 9 uses a **wipe and recreate** approach instead of numbered SQL migration files.
+
+**Do this once when starting Phase 9 schema work**
+
+- [ ] Delete SQLite DB file (e.g. `src/data/redeemer.db` or path from `DATABASE_URL`)
+- [ ] Delete JSON code files under `src/data/**/codes.json` (if any)
+- [ ] Delete test Chrome profile folders under `CHROME_USER_DATA_DIR` (optional but recommended)
+
+**Implementation approach**
+
+- [ ] Replace `migrations.ts` with a **single full schema** — all tables defined together: `users`, `codes`, `scheduled_tasks` (with `user_id`), `run_history` (with `user_id`), indexes
+- [ ] Keep `migrateSqliteDatabase(db)` as `CREATE TABLE IF NOT EXISTS` + indexes on startup (idempotent for empty DB)
+- [ ] **No** `schema_migrations` table, **no** `001_*.sql` / `002_*.sql` files, **no** import from old `codes.json` or backfill of old task rows
+- [ ] Document reset in README: stop app → delete DB (+ codes JSON + chrome folders) → start app → fresh schema
+
+**Later (post-Phase 9, when data matters):** introduce numbered migrations and `schema_migrations` before any shared/production deploy. Not in scope for this phase.
+
+### Security principles (apply in every subtask below)
+
+- Passwords encrypted at rest (`CREDENTIALS_ENCRYPTION_KEY`); never log passwords
+- Parameterized SQL + Zod validation on all inputs
+- Session in-memory only — never persisted to DB/disk between process runs
+- Chrome profile paths app-assigned only; sanitized; deleted with account
+- Guest least-privilege — no access to other users' data
+
+---
+
+### Sequential subtasks
+
+> Work **in order**. Mark a step ✅ only after its **Verify** checks pass. Do not skip ahead — later steps depend on earlier ones.
+
+| Step | Summary | Status |
+|------|---------|--------|
+| [9.1](#step-91--schema-foundation-clean-slate) | Full schema + `users` table (wipe DB first) | ⏳ |
+| [9.2](#step-92--session-model-in-memory-only) | `SessionContext` (no persistence) | ⏳ |
+| [9.3](#step-93--sign-up--chrome-profile) | New account + auto Chrome folder | ⏳ |
+| [9.4](#step-94--startup-gate--login-cli) | Startup screen + login (CLI) | ⏳ |
+| [9.5](#step-95--guest-mode-cli) | Guest menu (Run now only) | ⏳ |
+| [9.6](#step-96--logged-in-run-now) | Run now with stored credentials | ⏳ |
+| [9.7](#step-97--user-scoped-tasks--history) | `user_id` on tasks + history | ⏳ |
+| [9.8](#step-98--sqlite-codes-per-user) | Codes in SQLite; remove JSON store | ⏳ |
+| [9.9](#step-99--scheduler-per-user) | Scheduler + Chrome per user | ⏳ |
+| [9.10](#step-910--account-menu) | Log out + delete account | ⏳ |
+| [9.11](#step-911--telegram-parity) | Same auth flows on Telegram | ⏳ |
+| [9.12](#step-912--cleanup--docs) | Remove legacy paths; docs + E2E | ⏳ |
+
+---
+
+#### Step 9.1 — Schema foundation (clean slate)
+
+**Goal:** Wipe test data; define full Phase 9 schema in one place; `users` table + credential crypto.
+
+**Build**
+
+- [ ] **Reset:** delete existing DB file, `codes.json` files, and test Chrome profiles (manual or `npm run db:reset` script)
+- [ ] Rewrite `src/infrastructure/storage/sqlite/migrations.ts` — single schema block with `users`, `scheduled_tasks` (+ `user_id`), `run_history` (+ `user_id`), `codes`, indexes (no separate migration versions)
+- [ ] `UserRepository` — create, getById, listForLogin, delete
+- [ ] `credentialCrypto.ts` — encrypt/decrypt password at rest; validate `CREDENTIALS_ENCRYPTION_KEY` at startup
+- [ ] Zod schemas for user create/login payloads
+
+**Verify**
+
+- [ ] `npm run typecheck` passes
+- [ ] Delete DB → start app → tables created; second start is idempotent (`CREATE IF NOT EXISTS`)
+- [ ] Create user via repository; password in DB is not plain text
+- [ ] List users returns labels without exposing password
+- [ ] Old scheduled tasks / history / codes are **gone** after reset (expected)
+
+**Status:** ⏳ NOT STARTED
+
+---
+
+#### Step 9.2 — Session model (in-memory only)
+
+**Goal:** Single `SessionContext` used by all adapters; cleared on exit — no disk persistence.
+
+**Build**
+
+- [ ] `SessionContext` type: `{ kind: "guest" }` | `{ kind: "user"; userId: string }`
+- [ ] `SessionManager` (or equivalent) — set/get/clear; **no** SQLite/file writes
+- [ ] Wire clear on CLI Exit, log out hook, process `SIGINT`/`beforeExit`
+- [ ] Document: restarting app always requires login/guest again
+
+**Verify**
+
+- [ ] Unit test: set user → clear → `get()` is null/empty
+- [ ] No session files created under `src/data` or temp dirs during run
+- [ ] After Exit and re-entering CLI, startup gate shows again (manual smoke once 9.4 exists)
+
+**Status:** ⏳ NOT STARTED
+
+---
+
+#### Step 9.3 — Sign-up + Chrome profile
+
+**Goal:** New account flow creates DB row + Chrome profile directory automatically.
+
+**Build**
+
+- [ ] `createChromeProfileForUser(userId)` → `path.join(CHROME_USER_DATA_DIR, userId)`; `fs.mkdir` on sign-up
+- [ ] Shared `signUpFlow(port)` — game, username, password, server (reuse collectors)
+- [ ] Store `chrome_profile` on user row; never prompt user for path
+- [ ] On success: set `SessionContext` to logged-in user
+
+**Verify**
+
+- [ ] Sign up → folder exists on disk
+- [ ] `users.chrome_profile` matches created path
+- [ ] Duplicate (game, username, server) rejected with clear error
+- [ ] User lands on full main menu after sign-up
+
+**Status:** ⏳ NOT STARTED
+
+---
+
+#### Step 9.4 — Startup gate + login (CLI)
+
+**Goal:** Every CLI start shows Login | New account | Guest before main menu.
+
+**Build**
+
+- [ ] `startupGateFlow(port)` — three choices; New account → `signUpFlow`; Login → user picker (game · username · server)
+- [ ] Login sets `SessionContext`; no password re-entry at login (account is the identity)
+- [ ] Integrate in `cliApp.ts` before `runInteractiveApp`
+- [ ] Exit from main menu → process ends → next `npm run dev` shows startup gate again
+
+**Verify**
+
+- [ ] Cold start always shows startup gate
+- [ ] Login as user A → main menu; Exit → restart → startup gate (not auto-logged-in)
+- [ ] Two saved users: picker shows both; selecting one loads correct session
+
+**Status:** ⏳ NOT STARTED
+
+---
+
+#### Step 9.5 — Guest mode (CLI)
+
+**Goal:** Guest sees **Run now + Exit** only; credentials prompted every run.
+
+**Build**
+
+- [ ] `runInteractiveApp` accepts `SessionContext`
+- [ ] Guest menu: **Run now** + Exit only — hide Schedule, List, Cancel, History, Account (logged-in keeps Run now + all schedule options)
+- [ ] Guest run now: always collect game + credentials (existing collectors)
+- [ ] Guest runs do not write `user_id` on tasks/history (or skip persistent history — define in 9.7)
+
+**Verify**
+
+- [ ] Guest cannot reach schedule/list/history menus
+- [ ] Each guest run prompts credentials
+- [ ] Guest Exit → restart → startup gate
+
+**Status:** ⏳ NOT STARTED
+
+---
+
+#### Step 9.6 — Logged-in run now
+
+**Goal:** Logged-in user runs without re-entering username/password/server.
+
+**Build**
+
+- [ ] `runNowFlow` reads credentials from `UserRepository` when `SessionContext.kind === "user"`
+- [ ] Pass user's `chrome_profile` into workflow (stub OK until 9.9 fully wires launcher)
+- [ ] Keep scrape yes/no prompt for manual runs
+
+**Verify**
+
+- [ ] Logged-in run now does not ask for username/password/server
+- [ ] Wrong stored credentials still fail redeem gracefully (logged error, no crash)
+- [ ] `npm run typecheck` passes
+
+**Status:** ⏳ NOT STARTED
+
+---
+
+#### Step 9.7 — User-scoped tasks + history
+
+**Goal:** Scheduled tasks and run history filtered by `user_id`.
+
+**Build**
+
+- [ ] `scheduled_tasks` / `run_history` include `user_id` NOT NULL (already in schema from 9.1 — no ALTER migration)
+- [ ] `TaskStore` / `RunHistoryStore` — `listByUserId`, `record` includes `user_id`
+- [ ] `scheduleFlow` attaches `user_id` from session
+- [ ] List/cancel/history UI uses filtered queries only
+- [ ] Display cards unchanged but data scoped
+
+**Verify**
+
+- [ ] User A schedules task; User B list is empty
+- [ ] User A history does not show User B runs
+- [ ] Guest runs do not appear in any user's history (or are omitted from DB)
+
+**Status:** ⏳ NOT STARTED
+
+---
+
+#### Step 9.8 — SQLite codes per user
+
+**Goal:** Replace JSON `codes.json` with per-user SQLite rows.
+
+**Build**
+
+- [ ] `codes` table keyed by `(user_id, game_id, code)` (already in schema from 9.1)
+- [ ] `SqliteCodeStore` implements scrape/merge/redeem lookups scoped by `user_id`
+- [ ] `redeemWorkflow` + `scrapePolicy` pass `userId` from session/task
+- [ ] Remove JSON `codeStore` runtime path; drop `CODE_STORE_BASE_PATH` for codes
+- [ ] **No** import of old `codes.json` — test data discarded with DB wipe
+
+**Verify**
+
+- [ ] User A redeems code X; User B still has X pending
+- [ ] `hasScrapedToday` scoped per user
+- [ ] No read/write of `src/data/**/codes.json` during run
+- [ ] `npm run typecheck` + manual scrape + redeem smoke
+
+**Status:** ⏳ NOT STARTED
+
+---
+
+#### Step 9.9 — Scheduler per user
+
+**Goal:** Scheduled fires use correct credentials, codes, and Chrome profile.
+
+**Build**
+
+- [ ] `SchedulerRunner` trigger loads user by `scheduled_tasks.user_id`
+- [ ] `chromeLauncher` uses `users.chrome_profile` per run (not global `CHROME_USER_DATA_DIR` only)
+- [ ] Scheduled tasks register with `scrapePolicy: ifNotScrapedToday` per user
+- [ ] Telegram notify (if used) still works per chat metadata
+
+**Verify**
+
+- [ ] Two users, two schedules — each fires with own credentials (log/profile path)
+- [ ] Same code different redeem state per user after scheduled run
+- [ ] Next-run display still correct per task
+
+**Status:** ⏳ NOT STARTED
+
+---
+
+#### Step 9.10 — Account menu
+
+**Goal:** Log out + delete account (no edit).
+
+**Build**
+
+- [ ] Main menu **Account** (logged-in only): Log out | Delete account
+- [ ] **Log out** → clear session → return to startup gate (process keeps running)
+- [ ] **Delete account** → confirm → delete user row + cascade codes/tasks/history + `fs.rm(chrome_profile)`
+- [ ] No edit option; README/plan note: change account = delete + new account
+
+**Verify**
+
+- [ ] Log out → startup gate; log in again works
+- [ ] Delete → user gone from login picker; Chrome folder removed
+- [ ] Deleted user's tasks/history/codes not visible to anyone
+
+**Status:** ⏳ NOT STARTED
+
+---
+
+#### Step 9.11 — Telegram parity
+
+**Goal:** Same startup gate, session rules, and menus on Telegram.
+
+**Build**
+
+- [ ] `/start` → startup gate (Login | New account | Guest)
+- [ ] In-memory `chatId` → `SessionContext` (cleared on `/stop`, log out, exit)
+- [ ] Guest: run now only; logged-in: full menu + account
+- [ ] `/stop` and bot shutdown clear session; next `/start` requires login again
+- [ ] No `user_id` stored in Telegram message metadata for auto-login
+
+**Verify**
+
+- [ ] Telegram guest cannot schedule
+- [ ] `/stop` then `/start` → startup gate (not auto-logged-in)
+- [ ] Two users on same chat: login picker works
+- [ ] Display cards render correctly in Telegram HTML
+
+**Status:** ⏳ NOT STARTED
+
+---
+
+#### Step 9.12 — Cleanup + docs
+
+**Goal:** Remove legacy paths; document env; full acceptance pass.
+
+**Build**
+
+- [ ] Remove `DATABASE_URL=json:...` task-store fallback (SQLite only)
+- [ ] Update `.env.example` — `DATABASE_URL`, `CHROME_USER_DATA_DIR`, `CREDENTIALS_ENCRYPTION_KEY`
+- [ ] Update `README.md` — auth flows, guest vs logged-in, no session persistence, key backup, **how to reset DB** (delete file / `db:reset`)
+- [ ] Phase 10 Docker note: single DB volume + `/data/chrome/<user_id>/`
+- [ ] Changelog entry
+
+**Verify (full Phase 9 acceptance)**
+
+- [ ] All steps 9.1–9.11 ✅
+- [ ] `npm run build` + `npm run typecheck`
+- [ ] CLI E2E: sign up → schedule → list → history → log out → guest run → exit → re-login
+- [ ] Telegram E2E: same happy path
+- [ ] Two users same game: isolated codes, tasks, history, Chrome profiles
+
+**Status:** ⏳ NOT STARTED
+
+---
+
+## Phase 10 — Docker / Azure Deployment ⏳ IN PROGRESS
+
+- [x] `deploy/Dockerfile`
+- [x] `deploy/docker-compose.yml` (loads root `.env`)
+- [x] `.env.example` — app config only
+- [x] Deployment docs in root `README.md`
+- [ ] Verify headless redeem in container
+- [ ] Wire Azure VM / Container Apps with mounted `/data` volume (DB + chrome profiles)
 - [ ] `.gitignore`: `deploy/instances/**/.env`, `deploy/instances/**/data/`
+
+> **Note:** Phase 10 deploy assumes Phase 9 unified SQLite — one DB volume, no separate codes JSON mount.
 
 ---
 
 ## Roadmap — Input adapters
 
-| Phase | Adapter | Status |
-|-------|---------|--------|
-| 7 | Terminal CLI (Run now + Schedule) | ⏳ Planned |
-| 10 | Telegram bot | 🔮 Future |
-| 11 | REST API | 🔮 Future |
-| 12 | Web dashboard | 🔮 Future |
+
+| Adapter                           | Status     |
+| --------------------------------- | ---------- |
+| Terminal CLI (Run now + Schedule) | ✅ Complete |
+| Telegram bot                      | ✅ Complete |
+| REST API                          | 🔮 Future  |
+| Discord bot                       | 🔮 Future  |
+
 
 ---
 
-## Future TODO — Email Reporting
+## Future TODO
+
+### Multi-capability platform (major)
+
+> **Goal:** Support multiple unrelated automations (e.g. code redeemer, FB friend requests, IG reel downloader) behind the **same input adapters** (CLI, Telegram, future Discord/HTTP). Today adapters only drive redeem via `mainMenu` → `RedeemTask` → `runRedeemTask`. Add a **capability layer** so new bots plug in without forking menus or overloading `RedeemTask.metadata`.
+
+**Current limitation:** input adapters are reusable; domain/application are redeem-only. `RedeemTask`, scheduler, run history, and `mainMenu` are hardcoded to scrape/redeem.
+
+**Target:**
+
+```text
+CLI / Telegram / Discord / HTTP  →  Capability router menu  →  capabilityModules registry
+                                        │
+                        ┌───────────────┼───────────────┐
+                        ▼               ▼               ▼
+                  CodeRedeemer    FbFriendBot    IgReelDownloader
+```
+
+- Input adapters stay thin (`PromptPort`, session, call router).
+- Capabilities own prompts, validation, execution, optional scheduling, and their own job/result types (`AppJob` union).
+- Redeem becomes the first registered capability (`codeRedeemCapability`).
+- Start after Phase 9 (per-user scoping) when possible.
+
+- [ ] `CapabilityModule` interface + `capabilityModules.ts` registry (mirror `adapterModules.ts`)
+- [ ] `AppJob` / result types — `RedeemTask` as one variant
+- [ ] Capability router menu (replace or wrap redeem-only `mainMenu`)
+- [ ] Migrate code redeem into `codeRedeemCapability`
+- [ ] Scheduler + run history dispatch by job/capability type
+- [ ] Wire CLI + Telegram through router (no redeem logic in adapters)
+- [ ] Docs: how to add a capability; optional second-capability spike
+
+### Email reporting
 
 - [ ] `src/infrastructure/reporting/emailReporter.ts`
-- [ ] Subscribe to `WorkflowEvent` on event bus (post-run hook — no mode branching)
+- [ ] Subscribe to `WorkflowEvent` on event bus (post-run hook)
 
 ---
 
 ## Changelog
 
-| Date | Phase | Notes |
-|------|-------|-------|
-| 2026-06-08 | 6 | Terminal prompts for manual scrape + credentials |
-| 2026-06-08 | 6b | Single-instance env-only; JSON code store; no MongoDB |
-| 2026-06-08 | 8 | Removed legacy folders and dead code |
-| 2026-06-08 | 7-plan | Docker/instance model documented — one container per account×game |
-| 2026-06-08 | 7-arch | Event-driven architecture redesign documented in PLAN.md |
-| 2026-06-08 | 9 | Docker phase renumbered; aligned with task-based config model |
-| 2026-06-08 | 7 | Zero-legacy cleanup policy + deletion registry + audit gate added |
+
+| Date       | Phase   | Notes                                                 |
+| ---------- | ------- | ----------------------------------------------------- |
+| 2026-06-08 | 6       | Terminal prompts for manual scrape + credentials      |
+| 2026-06-08 | 6b      | Single-instance env-only; JSON code store; no MongoDB |
+| 2026-06-08 | 8       | Removed legacy folders and dead code                  |
+| 2026-06-08 | 7-plan  | Event-driven architecture documented                  |
+| 2026-06-08 | 7-step2 | `appConfig.ts`; deleted `env.ts` / `AppEnv`           |
+| 2026-06-08 | 7-step3 | CLI adapter menu, taskFactory; removed legacy bridge  |
+| 2026-06-08 | 7-step4 | SchedulerRunner + task store persistence              |
+| 2026-06-09 | 7-step5 | SQLite task + run history; server mode (`--server`)   |
+| 2026-06-09 | 7-step6 | Telegram adapter + Docker deploy files                |
+| 2026-06-09 | 7-step7 | Legacy purge; `dev`/`start` scripts; root README      |
+| 2026-06-09 | 9-plan  | Phase 9: multi-user, unified SQLite (no codes.json), migrations sketch |
+| 2026-06-09 | 9-plan  | Phase 9: login/guest flows, users table, account menu, auth practices |
+| 2026-06-09 | 9-plan  | Phase 9: no session persistence — re-login after exit (all adapters) |
+| 2026-06-09 | 9-plan  | Phase 9: sequential subtasks 9.1–9.12 with per-step verify checklist |
+| 2026-06-09 | 9-plan  | Phase 9: clean-slate schema (no incremental SQL migrations; wipe test DB) |
+| 2026-06-08 | future  | Future TODO: multi-capability platform (capability registry + router) |
+

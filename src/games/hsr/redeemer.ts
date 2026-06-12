@@ -1,6 +1,6 @@
 import { RedeemStatus } from "../../config/constants.js";
 import type { ChromeSession } from "../../types/browser.js";
-import type { CodeRedeemResult, GameRedeemOptions } from "../../types/redeem.js";
+import type { CodeRedeemResult, GameRedeemOptions } from "../../domain/result/codeRedeemResult.js";
 import { hsrStubCodes } from "./config.js";
 
 export async function redeemHsrCodes(

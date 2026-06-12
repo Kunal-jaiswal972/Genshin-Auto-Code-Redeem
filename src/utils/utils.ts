@@ -30,12 +30,29 @@ export function maskSecret(text: string): string {
   return `${text.substring(0, 2)}${"*".repeat(text.length - 2)}`;
 }
 
-export function formatAccountLabel(email: string): string {
-  return maskSecret(email.trim());
+export function formatAccountLabel(username: string): string {
+  return maskSecret(username.trim());
 }
 
 export function formatWaitMs(ms: number): string {
   return `${ms}ms`;
+}
+
+export function formatScheduleInstant(iso: string | null | undefined): string {
+  if (!iso) {
+    return "none";
+  }
+
+  const date = new Date(iso);
+
+  if (Number.isNaN(date.getTime())) {
+    return iso;
+  }
+
+  return date.toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
 /** Fixed delay. Logs planned duration before waiting starts. */

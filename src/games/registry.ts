@@ -1,8 +1,8 @@
 import { GameId, type GameIdValue } from "../config/constants.js";
-import { ConfigError } from "../core/errors.js";
-import type { GameModule } from "../types/games.js";
-import { genshinGameModule } from "./genshin/index.js";
-import { hsrGameModule } from "./hsr/index.js";
+import { ConfigError } from "../domain/errors.js";
+import type { GameModule } from "./gameModule.js";
+import { genshinGameModule } from "./genshin/genshinModule.js";
+import { hsrGameModule } from "./hsr/hsrModule.js";
 
 /**
  * Single registration point for all games.
