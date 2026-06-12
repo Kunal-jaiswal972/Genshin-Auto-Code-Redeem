@@ -2,13 +2,19 @@ FROM node:20-bookworm-slim AS build
 
 WORKDIR /app
 
+# better-sqlite3 native addon — no prebuild on slim image without these
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY tsconfig.json tsconfig.typecheck.json ./
 COPY src ./src
 
-RUN npm run build
+RUN npm run build \
+  && npm prune --omit=dev
 
 FROM node:20-bookworm-slim AS runtime
 
@@ -25,14 +31,11 @@ ENV NODE_ENV=production \
   DATABASE_URL=file:/data/redeemer.db
 
 COPY package.json package-lock.json ./
-RUN npm ci
-
-COPY tsconfig.json tsconfig.typecheck.json ./
-COPY src ./src
+COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 
 RUN mkdir -p /data/codes /data/chrome
 
 VOLUME ["/data"]
 
-CMD ["npm", "start"]
+CMD ["node", "dist/index.js"]
