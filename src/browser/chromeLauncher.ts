@@ -31,7 +31,7 @@ function killExistingDebugChrome(userDataDir: string): void {
   }
 }
 
-function spawnChrome(options: ChromeLaunchOptions): void {
+function buildChromeSpawnArgs(options: ChromeLaunchOptions): string[] {
   const args = [
     `--remote-debugging-port=${options.debugPort}`,
     `--user-data-dir=${options.userDataDir}`,
@@ -40,8 +40,21 @@ function spawnChrome(options: ChromeLaunchOptions): void {
   ];
 
   if (options.headless) {
-    args.push("--headless=new", "--window-size=1280,800");
+    args.push(
+      "--headless=new",
+      "--window-size=1280,800",
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+    );
   }
+
+  return args;
+}
+
+function spawnChrome(options: ChromeLaunchOptions): void {
+  const args = buildChromeSpawnArgs(options);
 
   const child = spawn(options.executablePath, args, {
     detached: true,
